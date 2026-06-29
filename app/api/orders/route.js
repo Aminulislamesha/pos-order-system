@@ -5,9 +5,18 @@ import path from 'path';
 export async function GET() {
   try {
     const auth = new google.auth.GoogleAuth({
-      keyFile: path.join(process.cwd(), 'credentials.json'),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+  // If the Vercel variables exist, use them. 
+  // (The .replace is necessary because Vercel sometimes messes up the line breaks in the key)
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY 
+      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+      : undefined,
+  },
+  // If the variables don't exist (like on your laptop), it will try the file as a backup
+  keyFile: process.env.GOOGLE_PRIVATE_KEY ? undefined : "credentials.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
 
     const sheets = google.sheets({ version: 'v4', auth });
     
