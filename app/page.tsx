@@ -110,7 +110,15 @@ export default function POSDashboard() {
       if (isSC) return true; 
       if (isNN) {
         const isNotExcluded = !/hold|cancelled|cancel/i.test(notes);
-        const hasRequiredCode = /\b(C|wa|WA|c|M|m)\b/.test(notes);
+        
+        // 1. Chop the notes into an array wherever there is a comma
+        // 2. Trim the extra spaces off the edges of each piece
+        // 3. Convert them to lowercase so we don't have to check 'WA' and 'wa' separately
+        const noteItems = notes.split(',').map(item => item.trim().toLowerCase());
+        
+        // 4. Check if any of those exact, isolated pieces are our required codes
+        const hasRequiredCode = noteItems.includes('c') || noteItems.includes('m') || noteItems.includes('wa');
+        
         return isNotExcluded && hasRequiredCode;
       }
       return false; 
