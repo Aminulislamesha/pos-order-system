@@ -38,7 +38,7 @@ export default function POSDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"main" | "printFilter" | "scanner">("main");
   
-  // NEW: Toggle for Scanner History
+  // Toggle for Scanner History
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [lastScannedOrder, setLastScannedOrder] = useState<OrderRow | null>(null);
 
@@ -62,18 +62,13 @@ export default function POSDashboard() {
     const numericSerial = Number(serial);
 
     if (isNaN(numericSerial)) {
-      // If it's a text timestamp (e.g., "2026-06-27 05:40:51 +0600"), parse it directly
       dateObj = new Date(String(serial));
     } else {
-      // If it's a Google Sheets serial number, convert it
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
       dateObj = new Date(excelEpoch.getTime() + numericSerial * 86400000);
     }
 
-    // Fallback just in case the date is completely invalid
     if (isNaN(dateObj.getTime())) return String(serial);
-
-    // Format to "7 June"
     return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }); 
   };
 
@@ -121,23 +116,18 @@ export default function POSDashboard() {
       return false; 
     });
 
-    // NEW SMART SORTING LOGIC
     const sorted = filtered.sort((a, b) => {
       const getTime = (serial: string | number) => {
         if (!serial) return 0;
         const num = Number(serial);
         if (isNaN(num)) {
-          // If text date, get standard milliseconds
           const parsed = new Date(String(serial)).getTime();
           return isNaN(parsed) ? 0 : parsed;
         } else {
-          // If Google serial, calculate milliseconds
           const excelEpoch = new Date(Date.UTC(1899, 11, 30));
           return excelEpoch.getTime() + num * 86400000;
         }
       };
-      
-      // Oldest first (smaller time value), newest last (larger time value)
       return getTime(a.colA) - getTime(b.colA); 
     });
 
@@ -147,15 +137,16 @@ export default function POSDashboard() {
     setActiveView("printFilter");
   };
 
+  // Keyboard Scanner Effect
   useEffect(() => {
     if (activeView !== "scanner") return;
     let barcodeBuffer = "";
     let timeoutId: NodeJS.Timeout | null = null;
-    const handleKeyDown = async (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && barcodeBuffer.length > 0) {
         const scannedCode = barcodeBuffer.trim();
         barcodeBuffer = ""; 
-        await processScannedCode(scannedCode);
+        processScannedCode(scannedCode);
         return;
       }
       if (e.key.length === 1) {
@@ -168,44 +159,61 @@ export default function POSDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeView, allOrders, scannedIds]); 
 
+  // Camera Scanner Effect (UPDATED FOR HIGH SPEED)
   useEffect(() => {
     if (activeView !== "scanner") return;
     const scanner = new Html5QrcodeScanner("reader", { qrbox: { width: 250, height: 250 }, fps: 5 }, false);
     
     scanner.render((decodedText) => {
+      // 1. Instantly pause to prevent double scanning
       try { scanner.pause(true); } catch (err) {}
 
-      processScannedCode(decodedText.trim()).then(() => {
-        setTimeout(() => {
-          try { scanner.resume(); } catch (err) {}
-        }, 2000);
-      });
+      // 2. Play success beep
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.connect(audioContext.destination);
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.1);
+      } catch (e) {
+        console.warn("Audio not supported");
+      }
+
+      // 3. Process the code (updates UI and sends background fetch)
+      processScannedCode(decodedText.trim());
+
+      // 4. Force unpause exactly 1 second later, no matter what!
+      setTimeout(() => {
+        try { scanner.resume(); } catch (err) {}
+      }, 1000);
+      
     }, (error) => {});
     
     return () => { scanner.clear().catch(console.error); };
   }, [activeView]);
 
-  const processScannedCode = async (code: string) => {
+  // HIGH SPEED SCAN PROCESSOR
+  const processScannedCode = (code: string) => {
     const orderExists = allOrders.find(o => o.colB === code);
-    if (!orderExists || scannedIds.includes(code)) return; 
+    if (!orderExists) return; // Order not found in sheet
     
+    // Check if already scanned locally to avoid duplicate UI entries
+    if (scannedIds.includes(code)) return; 
+    
+    // Update local UI for the right-hand panel
     setScannedIds(prev => [...prev, code]);
     setLastScannedOrder(orderExists);
-    // NEW: Slice up to 10 instead of 5
     setScannedHistory(prev => [orderExists, ...prev].slice(0, 10));
-    
-    // Auto-switch to preview mode when a new scan happens
     setShowHistory(false);
     
-    try {
-      await fetch("/api/scanner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "color", rowIndex: orderExists.originalRowIndex })
-      });
-    } catch (err) {
-      console.error("Failed to update Sheet color:", err);
-    }
+    // FIRE AND FORGET: Send the update to Google Sheets but DO NOT wait for it to finish
+    fetch("/api/scanner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "color", rowIndex: orderExists.originalRowIndex })
+    }).catch(err => console.error("Failed to update Sheet color:", err));
   };
 
   const markAsPrinted = async () => {
@@ -616,7 +624,7 @@ export default function POSDashboard() {
               </div>
 
               {/* ========================================== */}
-              {/* PRODUCTS & TOTAL                           */}
+              {/* PRODUCTS & TOTAL                             */}
               {/* ========================================== */}
               <div className="mb-0 border-t border-dashed border-black pt-1">
                 {products.length === 0 ? (
@@ -641,7 +649,7 @@ export default function POSDashboard() {
               </div>
 
               {/* ========================================== */}
-              {/* BRANDING FOOTER                            */}
+              {/* BRANDING FOOTER                              */}
               {/* ========================================== */}
               <div className="flex flex-col items-center justify-center mt-0 mb-1 pt-0 pb-1 border-t border-dashed border-gray-400">
                 <img src="/logo.webp" alt="Nitto Notun" className="h-10 object-contain brightness-0" />
