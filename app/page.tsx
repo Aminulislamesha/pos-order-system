@@ -599,14 +599,14 @@ export default function POSDashboard() {
           return (
             <div 
               key={index} 
-              className="flex flex-col py-2 border-b-2 border-dashed border-black mb-1 pb-1" 
+              className="flex flex-col py-0.5 border-b-2 border-dashed border-black mb-0.5 pb-0.5" 
               style={{ pageBreakInside: 'avoid' }}
             >
               {/* ========================================== */}
               {/* 1. TOP LOGO HEADER (Full Width)              */}
               {/* ========================================== */}
               <div className="flex items-center justify-center gap-2 mb-0.5 pb-0.5 border-b-2 border-black">
-                <img src="/logo2.png" alt="Nitto Notun" className="h-8 w-auto object-contain brightness-0" />
+                <img src="/logo2.png" alt="Nitto Notun" className="h-5 w-auto object-contain brightness-0" />
                 <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
               </div>
 
