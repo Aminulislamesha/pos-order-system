@@ -603,7 +603,15 @@ export default function POSDashboard() {
               style={{ pageBreakInside: 'avoid' }}
             >
               {/* ========================================== */}
-              {/* NEW SIDE-BY-SIDE HEADER                      */}
+              {/* 1. TOP LOGO HEADER (Full Width)              */}
+              {/* ========================================== */}
+              <div className="flex items-center justify-center gap-2 mb-2 pb-2 border-b-2 border-black">
+                <img src="/logo2.png" alt="Nitto Notun" className="h-8 w-auto object-contain brightness-0" />
+                <h1 className="text-xl font-bold uppercase tracking-widest leading-none">Nitto Notun</h1>
+              </div>
+
+              {/* ========================================== */}
+              {/* 2. SIDE-BY-SIDE INFO & QR CODE               */}
               {/* ========================================== */}
               <div className="flex justify-between items-start mb-2">
                 
@@ -652,11 +660,9 @@ export default function POSDashboard() {
               {/* BRANDING FOOTER                              */}
               {/* ========================================== */}
               <div className="flex flex-col items-center justify-center mt-0 mb-1 pt-0 pb-1 border-t border-dashed border-gray-400">
-                <img src="/logo2.webp" alt="Nitto Notun" className="h-0 object-contain brightness-0" />
                 <p className="text-[8px] font-bold mt-1 text-center italic">Thanks for ordering at Nitto Notun.</p>
                 <p className="text-[7px] text-center mt-0.5">nittonotun.shop | +880 13062 86385</p>
               </div>
-              
               
             </div>
           );
