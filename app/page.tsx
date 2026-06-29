@@ -605,9 +605,9 @@ export default function POSDashboard() {
               {/* ========================================== */}
               {/* 1. TOP LOGO HEADER (Full Width)              */}
               {/* ========================================== */}
-              <div className="flex items-center justify-center gap-2 mb-1 pb-1 border-b-2 border-black">
+              <div className="flex items-center justify-center gap-2 mb-0.5 pb-0.5 border-b-2 border-black">
                 <img src="/logo2.png" alt="Nitto Notun" className="h-8 w-auto object-contain brightness-0" />
-                <h1 className="text-xl font-bold uppercase tracking-widest leading-none">Nitto Notun</h1>
+                <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
               </div>
 
               {/* ========================================== */}
