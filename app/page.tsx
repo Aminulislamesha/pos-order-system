@@ -597,7 +597,8 @@ export default function POSDashboard() {
         {activeView === "printFilter" && filteredOrders
           .filter(order => selectedForPrint.includes(order.colB)) 
           .map((order, index) => {
-          const customerName = order.cells[3]?.value || "No Name Provided";
+          const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
+          const customerName = rawName.split(/\s+/).slice(0, 2).join(" ");
           const rawPhone = order.cells[4]?.value || "";
           const phone = cleanPhoneNumber(rawPhone);
           const address = order.cells[5]?.value || "";
@@ -614,7 +615,7 @@ export default function POSDashboard() {
               {/* 1. TOP LOGO HEADER (Full Width)              */}
               {/* ========================================== */}
               <div className="flex items-center justify-center gap-2 mb-0.5 pb-0.5 border-b-2 border-black">
-                <img src="/logo2.png" alt="Nitto Notun" className="h-5 w-auto object-contain brightness-0" />
+                <img src="/logo2.png" alt="Nitto Notun" className="h-6 w-auto object-contain brightness-0" />
                 <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
               </div>
 
@@ -625,7 +626,8 @@ export default function POSDashboard() {
                 
                 {/* Left Side: Order Info & Customer Details */}
                 <div className="flex flex-col w-2/3 pr-0">
-                  <p className="text-xs font-bold leading-none float-left"><span>{order.colB}</span> <span>{customerName}</span></p>
+                  <p className="text-xs font-bold leading-none float-left">Order ID: {order.colB}</p>
+                  <p className="text-xs font-bold leading-none float-left">{customerName}</p>
                   <p className="text-[8px] mb-1.5 mt-0.5">Order date: {formatShortDate(order.colA)}</p>
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
