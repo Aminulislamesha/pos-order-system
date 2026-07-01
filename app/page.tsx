@@ -38,9 +38,10 @@ export default function POSDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"main" | "printFilter" | "scanner">("main");
   
-  // Toggle for Scanner History
+  // Toggle for Scanner History & Visuals
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [lastScannedOrder, setLastScannedOrder] = useState<OrderRow | null>(null);
+  const [scanFlash, setScanFlash] = useState<boolean>(false);
 
   useEffect(() => {
     fetchOrders();
@@ -111,12 +112,8 @@ export default function POSDashboard() {
       if (isNN) {
         const isNotExcluded = !/hold|cancelled|cancel/i.test(notes);
         
-        // 1. Chop the notes into an array wherever there is a comma
-        // 2. Trim the extra spaces off the edges of each piece
-        // 3. Convert them to lowercase so we don't have to check 'WA' and 'wa' separately
+        // Split by comma for strict standalone character checks
         const noteItems = notes.split(',').map(item => item.trim().toLowerCase());
-        
-        // 4. Check if any of those exact, isolated pieces are our required codes
         const hasRequiredCode = noteItems.includes('c') || noteItems.includes('m') || noteItems.includes('wa');
         
         return isNotExcluded && hasRequiredCode;
@@ -167,16 +164,14 @@ export default function POSDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeView, allOrders, scannedIds]); 
 
-  // Camera Scanner Effect (UPDATED FOR HIGH SPEED)
+  // Camera Scanner Effect (HIGH SPEED)
   useEffect(() => {
     if (activeView !== "scanner") return;
     const scanner = new Html5QrcodeScanner("reader", { qrbox: { width: 250, height: 250 }, fps: 5 }, false);
     
     scanner.render((decodedText) => {
-      // 1. Instantly pause to prevent double scanning
       try { scanner.pause(true); } catch (err) {}
 
-      // 2. Play success beep
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         const oscillator = audioContext.createOscillator();
@@ -189,10 +184,8 @@ export default function POSDashboard() {
         console.warn("Audio not supported");
       }
 
-      // 3. Process the code (updates UI and sends background fetch)
       processScannedCode(decodedText.trim());
 
-      // 4. Force unpause exactly 1 second later, no matter what!
       setTimeout(() => {
         try { scanner.resume(); } catch (err) {}
       }, 1000);
@@ -205,18 +198,21 @@ export default function POSDashboard() {
   // HIGH SPEED SCAN PROCESSOR
   const processScannedCode = (code: string) => {
     const orderExists = allOrders.find(o => o.colB === code);
-    if (!orderExists) return; // Order not found in sheet
+    if (!orderExists) return; 
     
-    // Check if already scanned locally to avoid duplicate UI entries
     if (scannedIds.includes(code)) return; 
     
-    // Update local UI for the right-hand panel
+    // Trigger visual success flash
+    setScanFlash(true);
+    setTimeout(() => setScanFlash(false), 500);
+    
+    // Update local UI
     setScannedIds(prev => [...prev, code]);
     setLastScannedOrder(orderExists);
     setScannedHistory(prev => [orderExists, ...prev].slice(0, 10));
     setShowHistory(false);
     
-    // FIRE AND FORGET: Send the update to Google Sheets but DO NOT wait for it to finish
+    // Fire and forget background fetch
     fetch("/api/scanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -489,103 +485,130 @@ export default function POSDashboard() {
       )}
 
       {/* ========================================== */}
-      {/* VIEW 3: CAMERA SCANNER MODAL               */}
+      {/* VIEW 3: CAMERA SCANNER MODAL (LOCKED HUD)  */}
       {/* ========================================== */}
       {activeView === "scanner" && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col p-4 print:hidden">
-          <div className="flex justify-between items-center mb-4 bg-gray-900 p-4 rounded-lg">
-            <h2 className="text-2xl font-bold text-white">📷 Package Scanner</h2>
-            <button onClick={() => setActiveView("main")} className="bg-red-600 text-white px-6 py-2 rounded-md font-bold hover:bg-red-700 shadow-md">
-              Close Scanner
+        <div className="fixed inset-0 bg-black z-50 flex flex-col print:hidden overflow-hidden">
+          
+          {/* COMPACT HEADER */}
+          <div className="flex justify-between items-center bg-gray-900 p-3 shrink-0 shadow-md z-10">
+            <h2 className="text-xl md:text-2xl font-bold text-white">📷 Scanner</h2>
+            <button onClick={() => setActiveView("main")} className="bg-red-600 text-white px-4 py-1.5 md:px-6 md:py-2 rounded-md font-bold hover:bg-red-700 shadow-md text-sm md:text-base">
+              Close
             </button>
           </div>
           
-          <div className="flex flex-col md:flex-row gap-6 flex-1 h-full overflow-hidden">
-            <div className="flex-1 bg-gray-800 rounded-lg flex flex-col items-center justify-center p-4 border-4 border-gray-700">
-               <div id="reader" className="w-full max-w-lg bg-black rounded-lg"></div>
-               <p className="text-gray-400 mt-4 text-center">Use your camera or upload an image. Leave this screen open as long as you need to scan.</p>
+          {/* SPLIT SCREEN LAYOUT (No Scrolling) */}
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative">
+            
+            {/* TOP (MOBILE) / LEFT (DESKTOP): CAMERA VIEWFINDER */}
+            <div className={`relative h-[45%] md:h-auto md:flex-1 bg-gray-800 flex flex-col items-center justify-center p-1 md:p-4 border-b-4 md:border-b-0 md:border-r-4 transition-colors duration-200 ${scanFlash ? 'border-green-500 bg-green-900/30' : 'border-gray-700'}`}>
+               <div id="reader" className="w-full h-full max-w-lg bg-black rounded-lg overflow-hidden flex items-center justify-center [&>video]:object-cover"></div>
+               <p className="text-gray-400 mt-2 text-xs text-center hidden md:block">Use your camera or upload an image. Leave this screen open as long as you need to scan.</p>
             </div>
             
-            {/* RIGHT PANEL: TOGGLE BETWEEN PREVIEW AND HISTORY */}
-            <div className="w-full md:w-1/3 bg-gray-900 rounded-lg border-2 border-cyan-500 p-6 flex flex-col h-full overflow-hidden">
+            {/* BOTTOM (MOBILE) / RIGHT (DESKTOP): ACTION HUD */}
+            <div className={`h-[55%] md:h-auto w-full md:w-1/3 bg-gray-900 border-t-4 md:border-t-0 md:border-l-4 p-3 md:p-6 flex flex-col overflow-hidden transition-all duration-200 ${scanFlash ? 'border-green-500 shadow-[0px_0px_30px_rgba(34,197,94,0.25)_inset]' : 'border-cyan-500'}`}>
               
-              <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                <h3 className="text-xl font-bold text-cyan-400">
-                  {showHistory ? "Scan History" : "Latest Scan Preview"}
+              <div className="flex justify-between items-center mb-2 md:mb-4 border-b border-gray-700 pb-2 shrink-0">
+                <h3 className="text-lg md:text-xl font-bold text-cyan-400">
+                  {showHistory ? "Scan History" : "Latest Scan"}
                 </h3>
                 <button 
                   onClick={() => setShowHistory(!showHistory)}
-                  className="bg-gray-700 text-white px-3 py-1 text-sm rounded hover:bg-gray-600 transition"
+                  className="bg-gray-700 text-white px-3 py-1 text-xs md:text-sm rounded hover:bg-gray-600 transition"
                 >
-                  {showHistory ? "Back to Preview" : `View History (${scannedHistory.length})`}
+                  {showHistory ? "Back to Preview" : `History (${scannedHistory.length})`}
                 </button>
               </div>
               
               {!showHistory ? (
-                /* DETAILED LATEST SCAN PREVIEW */
+                /* DETAILED LATEST SCAN PREVIEW (Internally Scrollable) */
                 <div className="flex-1 overflow-y-auto pr-2">
                   {lastScannedOrder ? (
-                    <div className="bg-gray-800 p-4 rounded-lg border border-cyan-400 flex flex-col h-full">
-                      <div className="animate-pulse mb-4">
-                        <p className="text-3xl font-bold text-white mb-2">{lastScannedOrder.colB}</p>
-                        <p className="text-xl text-cyan-200 font-semibold mb-1">{lastScannedOrder.cells[3]?.value || "No Name"}</p>
-                        <p className="text-gray-300 font-mono mb-2">{cleanPhoneNumber(lastScannedOrder.cells[4]?.value || "")}</p>
-                        <p className="text-gray-400 text-sm whitespace-pre-wrap leading-relaxed">{lastScannedOrder.cells[5]?.value || "No Address Provided"}</p>
+                    <div className="bg-gray-800 p-3 md:p-4 rounded-lg border border-cyan-400 flex flex-col min-h-full">
+                      <div className="mb-3">
+                        <p className="text-2xl md:text-3xl font-bold text-white mb-1">{lastScannedOrder.colB}</p>
+                        <p className="text-lg md:text-xl text-cyan-200 font-semibold leading-tight mb-1">{lastScannedOrder.cells[3]?.value || "No Name"}</p>
+                        <p className="text-gray-300 font-mono text-sm md:text-base mb-1">{cleanPhoneNumber(lastScannedOrder.cells[4]?.value || "")}</p>
+                        <p className="text-gray-400 text-xs md:text-sm whitespace-pre-wrap leading-tight">{lastScannedOrder.cells[5]?.value || "No Address"}</p>
                       </div>
 
-                      <div className="mb-4 bg-gray-900 p-3 rounded">
-                        <p className="font-bold text-gray-400 text-xs uppercase mb-2 border-b border-gray-700 pb-1">Products</p>
+                      <div className="mb-3 bg-gray-900 p-2 md:p-3 rounded">
+                        <p className="font-bold text-gray-400 text-[10px] md:text-xs uppercase mb-1 border-b border-gray-700 pb-1">Products</p>
                         {extractProducts(lastScannedOrder.cells).length === 0 ? (
-                           <p className="text-sm italic text-gray-500">No products found</p>
+                           <p className="text-xs italic text-gray-500">No products found</p>
                         ) : (
                           extractProducts(lastScannedOrder.cells).map((p, i) => (
-                            <div key={i} className="flex justify-between text-sm text-gray-200 mb-1">
-                              <span className="w-4/5 break-words">{p.name}</span>
+                            <div key={i} className="flex justify-between text-xs md:text-sm text-gray-200 mb-1">
+                              <span className="w-4/5 break-words pr-1">{p.name}</span>
                               <span className="w-1/5 text-right font-bold text-cyan-400">x{p.qty}</span>
                             </div>
                           ))
                         )}
                       </div>
 
+                      {/* RED FLAG WARNING SYSTEM FOR NOTES */}
                       {lastScannedOrder.colC && (
-                        <div className="mb-4 p-3 bg-gray-700 rounded border border-gray-600">
-                          <p className="text-xs text-gray-400 uppercase font-bold mb-1">Note / Special Instructions:</p>
-                          <p className="text-sm text-white break-words">{lastScannedOrder.colC}</p>
+                        <div className={`mb-3 p-2 md:p-3 rounded border transition-colors ${/(hold|cancelled|cancel|see message|see wa|call before dispatch)/i.test(lastScannedOrder.colC) ? 'bg-red-950/60 border-red-500' : 'bg-gray-700 border-gray-600'}`}>
+                          <p className={`text-[10px] md:text-xs uppercase font-bold mb-1.5 ${/(hold|cancelled|cancel|see message|see wa|call before dispatch)/i.test(lastScannedOrder.colC) ? 'text-red-400' : 'text-gray-400'}`}>
+                            {/(hold|cancelled|cancel|see message|see wa|call before dispatch)/i.test(lastScannedOrder.colC) ? '⚠️ WARNING / NOTE:' : 'Note:'}
+                          </p>
+                          <p className="text-xs md:text-sm text-white break-words leading-relaxed items-center">
+                            {(() => {
+                              const noteText = lastScannedOrder.colC;
+                              const flagRegex = /(hold|cancelled|cancel|see message|see wa|call before dispatch)/gi;
+                              const parts = noteText.split(flagRegex);
+                              
+                              return parts.map((part, i) => {
+                                const isFlag = /^(hold|cancelled|cancel|see message|see wa|call before dispatch)$/i.test(part);
+                                if (isFlag) {
+                                  return (
+                                    <span key={i} className="inline-block bg-red-600 text-white px-2 py-0.5 rounded font-black uppercase tracking-wider shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-red-400 animate-pulse mx-1">
+                                      {part}
+                                    </span>
+                                  );
+                                }
+                                return <span key={i}>{part}</span>;
+                              });
+                            })()}
+                          </p>
                         </div>
                       )}
 
-                      <div className="mt-auto p-3 bg-gray-900 rounded border-l-4 border-green-500 text-sm text-gray-300 flex items-center gap-2">
-                        <span className="text-green-500 font-bold text-lg">✓</span> 
-                        <span>Successfully marked Cyan in Google Sheets</span>
+                      <div className="mt-auto p-2 bg-gray-900 rounded border-l-4 border-green-500 text-xs text-gray-300 flex items-center gap-2">
+                        <span className="text-green-500 font-bold text-sm">✓</span> 
+                        <span>Marked Cyan in Google Sheets</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="h-full flex items-center justify-center text-gray-500 italic text-center">
+                    <div className="h-full flex items-center justify-center text-gray-500 italic text-sm text-center">
                       Waiting for package scan...
                     </div>
                   )}
                 </div>
               ) : (
-                /* HISTORY LIST (LAST 10) */
-                <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                /* HISTORY LIST (Internally Scrollable) */
+                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                   {scannedHistory.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-gray-500 italic text-center">
+                    <div className="h-full flex items-center justify-center text-gray-500 italic text-sm text-center">
                       No scanning history yet.
                     </div>
                   ) : (
                     scannedHistory.map((order, i) => (
-                      <div key={i} className={`p-4 rounded border-l-4 ${i === 0 ? 'bg-gray-800 border-cyan-400' : 'bg-gray-800/50 border-gray-500'}`}>
+                      <div key={i} className={`p-3 rounded border-l-4 ${i === 0 ? 'bg-gray-800 border-cyan-400' : 'bg-gray-800/50 border-gray-500'}`}>
                         <div className="flex justify-between items-start mb-1">
-                          <p className={`text-xl font-bold ${i === 0 ? 'text-white' : 'text-gray-300'}`}>{order.colB}</p>
-                          {i === 0 && <span className="text-xs bg-cyan-900 text-cyan-200 px-2 py-1 rounded">LATEST</span>}
+                          <p className={`text-lg font-bold ${i === 0 ? 'text-white' : 'text-gray-300'}`}>{order.colB}</p>
+                          {i === 0 && <span className="text-[10px] bg-cyan-900 text-cyan-200 px-1.5 py-0.5 rounded">LATEST</span>}
                         </div>
-                        <p className={`text-md font-semibold ${i === 0 ? 'text-cyan-200' : 'text-gray-400'}`}>{order.cells[3]?.value || "No Name"}</p>
+                        <p className={`text-sm font-semibold truncate ${i === 0 ? 'text-cyan-200' : 'text-gray-400'}`}>{order.cells[3]?.value || "No Name"}</p>
                       </div>
                     ))
                   )}
                 </div>
               )}
             </div>
+            
           </div>
         </div>
       )}
@@ -626,8 +649,8 @@ export default function POSDashboard() {
                 
                 {/* Left Side: Order Info & Customer Details */}
                 <div className="flex flex-col w-2/3 pr-0">
-                  <p className="text-xs font-bold leading-none float-left">Order ID: {order.colB}</p>
-                  <p className="text-xs font-bold leading-none float-left">{customerName}</p>
+                  <p className="text-[11px] font-bold leading-none float-left">Order ID: {order.colB}</p>
+                  <p className="text-[11px] font-bold leading-none float-left">{customerName}</p>
                   <p className="text-[8px] mb-1.5 mt-0.5">Order date: {formatShortDate(order.colA)}</p>
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
