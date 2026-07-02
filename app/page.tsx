@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { QRCodeCanvas } from 'qrcode.react'; 
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
@@ -36,12 +36,38 @@ export default function POSDashboard() {
   // UI State
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"main" | "printFilter" | "scanner">("main");
+  const [activeView, setActiveView] = useState<"main" | "printFilter" | "scanner" | "factoryReport">("main");
   
   // Toggle for Scanner History & Visuals
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [lastScannedOrder, setLastScannedOrder] = useState<OrderRow | null>(null);
   const [scanFlash, setScanFlash] = useState<boolean>(false);
+
+  // Factory Spreadsheet, Drag Selection & Hierarchy Removal State
+  const [reportSearch, setReportSearch] = useState<string>(""); 
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [selectedFactoryRows, setSelectedFactoryRows] = useState<number[]>([]);
+  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
+  const [removedNodes, setRemovedNodes] = useState<string[]>([]); // Tracks manually hidden items
+
+  // DOM Refs for Auto-Scrolling
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const mousePosRef = useRef<{x: number, y: number} | null>(null);
+
+  // Utility functions
+  const cleanPhoneNumber = (phoneStr: string) => phoneStr ? phoneStr.replace(/^`/, '').trim() : "";
+  
+  const extractProducts = (cells: CellData[]) => {
+    const products = [];
+    for (let i = 11; i <= 21; i += 2) {
+      const productName = cells[i]?.value;
+      const productQty = cells[i + 1]?.value;
+      if (productName && String(productName).trim() !== "" && productName !== "NaN") {
+        products.push({ name: String(productName), qty: productQty ? String(productQty) : "1" });
+      }
+    }
+    return products;
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -58,7 +84,6 @@ export default function POSDashboard() {
 
   const formatShortDate = (serial: string | number) => {
     if (!serial) return "";
-    
     let dateObj: Date;
     const numericSerial = Number(serial);
 
@@ -111,11 +136,8 @@ export default function POSDashboard() {
       if (isSC) return true; 
       if (isNN) {
         const isNotExcluded = !/hold|cancelled|cancel/i.test(notes);
-        
-        // Split by comma for strict standalone character checks
         const noteItems = notes.split(',').map(item => item.trim().toLowerCase());
         const hasRequiredCode = noteItems.includes('c') || noteItems.includes('m') || noteItems.includes('wa');
-        
         return isNotExcluded && hasRequiredCode;
       }
       return false; 
@@ -125,13 +147,8 @@ export default function POSDashboard() {
       const getTime = (serial: string | number) => {
         if (!serial) return 0;
         const num = Number(serial);
-        if (isNaN(num)) {
-          const parsed = new Date(String(serial)).getTime();
-          return isNaN(parsed) ? 0 : parsed;
-        } else {
-          const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-          return excelEpoch.getTime() + num * 86400000;
-        }
+        if (isNaN(num)) return isNaN(new Date(String(serial)).getTime()) ? 0 : new Date(String(serial)).getTime();
+        return new Date(Date.UTC(1899, 11, 30)).getTime() + num * 86400000;
       };
       return getTime(a.colA) - getTime(b.colA); 
     });
@@ -141,6 +158,172 @@ export default function POSDashboard() {
     setLastSelectedIndex(null); 
     setActiveView("printFilter");
   };
+
+  // ==========================================
+  // FACTORY DATA CALCULATION (Filter + Sort)
+  // ==========================================
+  const consolidatedFactoryList = React.useMemo(() => {
+    const totals: Record<string, number> = {};
+    const validOrders = allOrders.filter(o => !/cancelled|cancel/i.test(o.colC || ""));
+    
+    validOrders.forEach(order => {
+       extractProducts(order.cells).forEach(p => {
+         let name = p.name.trim();
+
+         // Standardize Names & Fix Formats
+         name = name.replace(/Solid Color Formal Pants/ig, 'Ladies Formal Pant')
+                    .replace(/Office Black/ig, 'Black')
+                    .replace(/Wide Legged Formal Pants/ig, 'Wide Leg Formal Pants');
+         
+         name = name.replace(/-\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small)\s*,\s*([A-Za-z\s]+)$/i, '- $2 / $1');
+         name = name.replace(/\s*,\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small|Kid Size|Kid|[\d-]+\s*Years)$/i, ' / $1');
+         name = name.replace(/\bXXXL\b/ig, '3XL').replace(/\bXXL\b/ig, '2XL')
+                    .replace(/\bLarge\b/ig, 'L').replace(/\bMedium\b/ig, 'M').replace(/\bSmall\b/ig, 'S')
+                    .replace(/\bKid Size\b/ig, 'Kid');
+         
+         name = name.replace(/\s+/g, ' ').trim();
+         totals[name] = (totals[name] || 0) + (parseInt(p.qty) || 1);
+       });
+    });
+
+    const parsedList = Object.entries(totals).map(([name, qty]) => {
+       const splitIndex = name.lastIndexOf(' / ');
+       let baseName = name;
+       let size = "N/A";
+       if (splitIndex !== -1) {
+         baseName = name.substring(0, splitIndex).trim();
+         size = name.substring(splitIndex + 3).trim();
+       }
+
+       let product = baseName;
+       let color = "";
+       const colorSplitIndex = baseName.lastIndexOf(' - ');
+       if (colorSplitIndex !== -1) {
+          product = baseName.substring(0, colorSplitIndex).trim();
+          color = baseName.substring(colorSplitIndex + 3).trim();
+       }
+
+       return { name, baseName, product, color, size, qty };
+    });
+
+    const searchTerms = reportSearch.toLowerCase().split(" ").filter(Boolean);
+    const filtered = parsedList.filter(item => {
+      // Exclude manually removed hierarchy nodes
+      if (removedNodes.includes(`P:${item.product}`)) return false;
+      if (removedNodes.includes(`C:${item.product}|${item.color}`)) return false;
+      if (removedNodes.includes(`S:${item.name}`)) return false;
+
+      // Ensure it matches search
+      return searchTerms.every(term => item.name.toLowerCase().includes(term));
+    });
+
+    const productTotals: Record<string, number> = {};
+    const groupTotals: Record<string, number> = {};
+    filtered.forEach(item => {
+      productTotals[item.product] = (productTotals[item.product] || 0) + item.qty;
+      groupTotals[item.baseName] = (groupTotals[item.baseName] || 0) + item.qty;
+    });
+
+    const sizeWeights: Record<string, number> = { "3XL": 1, "2XL": 2, "XL": 3, "L": 4, "M": 5, "S": 6, "KID": 7 };
+    const getWeight = (s: string) => sizeWeights[s.toUpperCase()] || 99;
+
+    return filtered.sort((a, b) => {
+      if (productTotals[b.product] !== productTotals[a.product]) return productTotals[b.product] - productTotals[a.product];
+      if (a.product !== b.product) return a.product.localeCompare(b.product);
+      if (groupTotals[b.baseName] !== groupTotals[a.baseName]) return groupTotals[b.baseName] - groupTotals[a.baseName];
+      if (a.baseName !== b.baseName) return a.baseName.localeCompare(b.baseName);
+      return getWeight(a.size) - getWeight(b.size);
+    });
+
+  }, [allOrders, reportSearch, removedNodes]);
+
+  const currentTotalUnits = consolidatedFactoryList.reduce((sum, item) => sum + item.qty, 0);
+
+  // ==========================================
+  // EDGE AUTO-SCROLLING ENGINE & LISTENERS
+  // ==========================================
+  useEffect(() => {
+    let animationFrame: number;
+    
+    // Smooth Edge Scrolling Calculation
+    const scrollLoop = () => {
+        if (isDragging && mousePosRef.current && scrollContainerRef.current) {
+            const rect = scrollContainerRef.current.getBoundingClientRect();
+            const edgeSize = 60; // Distance from edge to trigger scroll
+            const maxSpeed = 15;
+            let scrollSpeed = 0;
+
+            const { y } = mousePosRef.current;
+
+            if (y > rect.bottom - edgeSize) {
+                const intensity = Math.min(1, (y - (rect.bottom - edgeSize)) / edgeSize);
+                scrollSpeed = intensity * maxSpeed;
+            } else if (y < rect.top + edgeSize) {
+                const intensity = Math.min(1, ((rect.top + edgeSize) - y) / edgeSize);
+                scrollSpeed = -intensity * maxSpeed;
+            }
+
+            if (scrollSpeed !== 0) {
+                scrollContainerRef.current.scrollTop += scrollSpeed;
+                
+                // Dynamically select rows as the container scrolls beneath the stationary mouse
+                const elem = document.elementFromPoint(mousePosRef.current.x, mousePosRef.current.y);
+                const tr = elem?.closest('tr[data-index]');
+                if (tr) {
+                    const indexStr = tr.getAttribute('data-index');
+                    if (indexStr) {
+                       const index = parseInt(indexStr, 10);
+                       if (!isNaN(index) && dragStartIndex !== null) {
+                           setSelectedFactoryRows(prev => {
+                              const start = Math.min(dragStartIndex, index);
+                              const end = Math.max(dragStartIndex, index);
+                              const range = [];
+                              for (let i = start; i <= end; i++) range.push(i);
+                              if (prev.length === range.length && prev[0] === range[0] && prev[prev.length-1] === range[range.length-1]) return prev; 
+                              return range;
+                           });
+                       }
+                    }
+                }
+            }
+        }
+        animationFrame = requestAnimationFrame(scrollLoop);
+    };
+
+    if (isDragging) animationFrame = requestAnimationFrame(scrollLoop);
+
+    const handleMouseMove = (e: MouseEvent) => {
+        mousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleMouseUp = () => setIsDragging(false);
+
+    // Ctrl+C Copy formatting
+    const handleCopy = (e: ClipboardEvent) => {
+      if (activeView === "factoryReport" && selectedFactoryRows.length > 0) {
+        e.preventDefault(); 
+        const selectedData = consolidatedFactoryList.filter((_, i) => selectedFactoryRows.includes(i));
+        let tsv = "Rank\tProduct Variant Description\tQty to Produce\n";
+        selectedData.forEach((row) => {
+          const actualRank = consolidatedFactoryList.findIndex(r => r.name === row.name) + 1;
+          tsv += `${actualRank}\t${row.name}\t${row.qty}\n`;
+        });
+        e.clipboardData?.setData('text/plain', tsv);
+        alert(`Copied ${selectedData.length} rows to clipboard! Ready to paste into Google Sheets.`);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('copy', handleCopy);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('copy', handleCopy);
+      cancelAnimationFrame(animationFrame);
+    };
+  }, [activeView, isDragging, dragStartIndex, selectedFactoryRows, consolidatedFactoryList]);
 
   // Keyboard Scanner Effect
   useEffect(() => {
@@ -164,14 +347,12 @@ export default function POSDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeView, allOrders, scannedIds]); 
 
-  // Camera Scanner Effect (HIGH SPEED)
+  // Camera Scanner Effect
   useEffect(() => {
     if (activeView !== "scanner") return;
     const scanner = new Html5QrcodeScanner("reader", { qrbox: { width: 250, height: 250 }, fps: 5 }, false);
-    
     scanner.render((decodedText) => {
       try { scanner.pause(true); } catch (err) {}
-
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         const oscillator = audioContext.createOscillator();
@@ -180,39 +361,26 @@ export default function POSDashboard() {
         oscillator.connect(audioContext.destination);
         oscillator.start();
         oscillator.stop(audioContext.currentTime + 0.1);
-      } catch (e) {
-        console.warn("Audio not supported");
-      }
-
+      } catch (e) {}
       processScannedCode(decodedText.trim());
-
-      setTimeout(() => {
-        try { scanner.resume(); } catch (err) {}
-      }, 1000);
-      
+      setTimeout(() => { try { scanner.resume(); } catch (err) {} }, 1000);
     }, (error) => {});
-    
     return () => { scanner.clear().catch(console.error); };
   }, [activeView]);
 
-  // HIGH SPEED SCAN PROCESSOR
   const processScannedCode = (code: string) => {
     const orderExists = allOrders.find(o => o.colB === code);
     if (!orderExists) return; 
-    
     if (scannedIds.includes(code)) return; 
     
-    // Trigger visual success flash
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 500);
     
-    // Update local UI
     setScannedIds(prev => [...prev, code]);
     setLastScannedOrder(orderExists);
     setScannedHistory(prev => [orderExists, ...prev].slice(0, 10));
     setShowHistory(false);
     
-    // Fire and forget background fetch
     fetch("/api/scanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -223,17 +391,11 @@ export default function POSDashboard() {
   const markAsPrinted = async () => {
     const rowsToProcess = filteredOrders.filter(r => selectedForPrint.includes(r.colB));
     if (rowsToProcess.length === 0) return alert("Please select at least one order to mark as printed.");
-    
     if (!confirm(`Mark ${rowsToProcess.length} selected orders with a strikethrough in Google Sheets?`)) return;
-
     setIsLoading(true);
     try {
       const indices = rowsToProcess.map(r => r.originalRowIndex);
-      await fetch("/api/scanner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "strikethrough", rowIndices: indices })
-      });
+      await fetch("/api/scanner", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "strikethrough", rowIndices: indices }) });
       setActiveView("main");
       await fetchOrders();
     } catch (err) {
@@ -243,9 +405,7 @@ export default function POSDashboard() {
   };
 
   const copyCyanRows = () => {
-    const cyanRows = allOrders.filter(row => 
-      scannedIds.includes(row.colB) || row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)')
-    );
+    const cyanRows = allOrders.filter(row => scannedIds.includes(row.colB) || row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)'));
     if (cyanRows.length === 0) return alert("No scanned/cyan rows to copy.");
     const textData = cyanRows.map(r => r.cells.map(c => c.value).join("\t")).join("\n");
     navigator.clipboard.writeText(textData);
@@ -253,39 +413,18 @@ export default function POSDashboard() {
   };
 
   const removeCyanRows = async () => {
-    const cyanRows = allOrders.filter(row => 
-      scannedIds.includes(row.colB) || row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)')
-    );
+    const cyanRows = allOrders.filter(row => scannedIds.includes(row.colB) || row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)'));
     if (cyanRows.length === 0) return alert("No scanned/cyan rows to delete.");
     if (!confirm(`Permanently delete ${cyanRows.length} cyan rows from Google Sheets?`)) return;
-
     setIsLoading(true);
     try {
       const indices = cyanRows.map(r => r.originalRowIndex);
-      await fetch("/api/scanner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", rowIndices: indices })
-      });
+      await fetch("/api/scanner", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", rowIndices: indices }) });
       await fetchOrders();
     } catch (err) {
       alert("Error deleting cyan rows.");
       setIsLoading(false);
     }
-  };
-
-  const cleanPhoneNumber = (phoneStr: string) => phoneStr ? phoneStr.replace(/^`/, '').trim() : "";
-  
-  const extractProducts = (cells: CellData[]) => {
-    const products = [];
-    for (let i = 11; i <= 21; i += 2) {
-      const productName = cells[i]?.value;
-      const productQty = cells[i + 1]?.value;
-      if (productName && String(productName).trim() !== "" && productName !== "NaN") {
-        products.push({ name: String(productName), qty: productQty ? String(productQty) : "1" });
-      }
-    }
-    return products;
   };
 
   if (isLoading) return <div className="p-10 text-xl font-bold flex justify-center mt-20">Syncing with Google Sheets...</div>;
@@ -309,26 +448,17 @@ export default function POSDashboard() {
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl font-bold text-gray-800">NN Order Management Center</h1>
               <div className="flex gap-4">
-                <button onClick={() => setActiveView("scanner")} className="bg-purple-600 text-white px-6 py-2 rounded-md font-bold hover:bg-purple-700 shadow-md">
-                  📷 Start Scanning
-                </button>
-                <button onClick={openFilteredView} className="bg-blue-600 text-white px-6 py-2 rounded-md font-bold hover:bg-blue-700 shadow-md">
-                  🖨️ Open Ready to Print
-                </button>
-                <button onClick={fetchOrders} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition shadow-sm">
-                  Force Refresh Data
-                </button>
+                <button onClick={() => setActiveView("scanner")} className="bg-purple-600 text-white px-6 py-2 rounded-md font-bold hover:bg-purple-700 shadow-md">📷 Start Scanning</button>
+                <button onClick={openFilteredView} className="bg-blue-600 text-white px-6 py-2 rounded-md font-bold hover:bg-blue-700 shadow-md">🖨️ Open Ready to Print</button>
+                <button onClick={() => setActiveView("factoryReport")} className="bg-orange-600 text-white px-6 py-2 rounded-md font-bold hover:bg-orange-700 shadow-md">🏭 Factory Report</button>
+                <button onClick={fetchOrders} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition shadow-sm">Force Refresh Data</button>
               </div>
             </div>
 
             <div className="flex gap-4 mb-6 bg-cyan-50 p-4 border border-cyan-200 rounded-lg">
               <span className="font-bold text-cyan-800 flex items-center">Cyan Row Actions:</span>
-              <button onClick={copyCyanRows} className="bg-cyan-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-cyan-700 shadow-sm">
-                Copy All Cyan Rows
-              </button>
-              <button onClick={removeCyanRows} className="bg-red-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-red-700 shadow-sm">
-                Delete All Cyan Rows from Sheet
-              </button>
+              <button onClick={copyCyanRows} className="bg-cyan-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-cyan-700 shadow-sm">Copy All Cyan Rows</button>
+              <button onClick={removeCyanRows} className="bg-red-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-red-700 shadow-sm">Delete All Cyan Rows from Sheet</button>
             </div>
 
             <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 flex flex-col">
@@ -388,15 +518,9 @@ export default function POSDashboard() {
                 <p className="text-blue-200 text-sm">{selectedForPrint.length} of {filteredOrders.length} orders selected.</p>
               </div>
               <div className="flex gap-4">
-                <button onClick={() => window.print()} disabled={selectedForPrint.length === 0} className="bg-green-500 text-white px-6 py-3 rounded-md font-bold hover:bg-green-600 shadow-md text-lg disabled:bg-gray-500">
-                  🖨️ Print Selected
-                </button>
-                <button onClick={markAsPrinted} disabled={selectedForPrint.length === 0} className="bg-red-500 text-white px-6 py-3 rounded-md font-bold hover:bg-red-600 shadow-md text-lg disabled:bg-gray-500">
-                  ✏️ Mark as Printed (Strikethrough)
-                </button>
-                <button onClick={() => setActiveView("main")} className="bg-gray-300 text-gray-800 px-6 py-3 rounded-md font-bold hover:bg-gray-400 shadow-md">
-                  Close X
-                </button>
+                <button onClick={() => window.print()} disabled={selectedForPrint.length === 0} className="bg-green-500 text-white px-6 py-3 rounded-md font-bold hover:bg-green-600 shadow-md text-lg disabled:bg-gray-500">🖨️ Print Selected</button>
+                <button onClick={markAsPrinted} disabled={selectedForPrint.length === 0} className="bg-red-500 text-white px-6 py-3 rounded-md font-bold hover:bg-red-600 shadow-md text-lg disabled:bg-gray-500">✏️ Mark as Printed</button>
+                <button onClick={() => setActiveView("main")} className="bg-gray-300 text-gray-800 px-6 py-3 rounded-md font-bold hover:bg-gray-400 shadow-md">Close X</button>
               </div>
             </div>
 
@@ -437,23 +561,15 @@ export default function POSDashboard() {
                               onChange={(e: any) => {
                                 const isChecking = e.target.checked;
                                 const isShiftPressed = e.nativeEvent.shiftKey;
-
                                 if (isShiftPressed && lastSelectedIndex !== null) {
                                   const start = Math.min(lastSelectedIndex, index);
                                   const end = Math.max(lastSelectedIndex, index);
                                   const rowsInRange = filteredOrders.slice(start, end + 1).map(r => r.colB);
-
-                                  if (isChecking) {
-                                    setSelectedForPrint(prev => Array.from(new Set([...prev, ...rowsInRange])));
-                                  } else {
-                                    setSelectedForPrint(prev => prev.filter(id => !rowsInRange.includes(id)));
-                                  }
+                                  if (isChecking) setSelectedForPrint(prev => Array.from(new Set([...prev, ...rowsInRange])));
+                                  else setSelectedForPrint(prev => prev.filter(id => !rowsInRange.includes(id)));
                                 } else {
-                                  if (isSelected) {
-                                    setSelectedForPrint(prev => prev.filter(id => id !== row.colB));
-                                  } else {
-                                    setSelectedForPrint(prev => [...prev, row.colB]);
-                                  }
+                                  if (isSelected) setSelectedForPrint(prev => prev.filter(id => id !== row.colB));
+                                  else setSelectedForPrint(prev => [...prev, row.colB]);
                                 }
                                 setLastSelectedIndex(index);
                               }}
@@ -489,41 +605,23 @@ export default function POSDashboard() {
       {/* ========================================== */}
       {activeView === "scanner" && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col print:hidden overflow-hidden">
-          
-          {/* COMPACT HEADER */}
           <div className="flex justify-between items-center bg-gray-900 p-3 shrink-0 shadow-md z-10">
             <h2 className="text-xl md:text-2xl font-bold text-white">📷 Scanner</h2>
-            <button onClick={() => setActiveView("main")} className="bg-red-600 text-white px-4 py-1.5 md:px-6 md:py-2 rounded-md font-bold hover:bg-red-700 shadow-md text-sm md:text-base">
-              Close
-            </button>
+            <button onClick={() => setActiveView("main")} className="bg-red-600 text-white px-4 py-1.5 md:px-6 md:py-2 rounded-md font-bold hover:bg-red-700 shadow-md text-sm md:text-base">Close</button>
           </div>
-          
-          {/* SPLIT SCREEN LAYOUT (No Scrolling) */}
           <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative">
-            
-            {/* TOP (MOBILE) / LEFT (DESKTOP): CAMERA VIEWFINDER */}
             <div className={`relative h-[45%] md:h-auto md:flex-1 bg-gray-800 flex flex-col items-center justify-center p-1 md:p-4 border-b-4 md:border-b-0 md:border-r-4 transition-colors duration-200 ${scanFlash ? 'border-green-500 bg-green-900/30' : 'border-gray-700'}`}>
                <div id="reader" className="w-full h-full max-w-lg bg-black rounded-lg overflow-hidden flex items-center justify-center [&>video]:object-cover"></div>
                <p className="text-gray-400 mt-2 text-xs text-center hidden md:block">Use your camera or upload an image. Leave this screen open as long as you need to scan.</p>
             </div>
-            
-            {/* BOTTOM (MOBILE) / RIGHT (DESKTOP): ACTION HUD */}
             <div className={`h-[55%] md:h-auto w-full md:w-1/3 bg-gray-900 border-t-4 md:border-t-0 md:border-l-4 p-3 md:p-6 flex flex-col overflow-hidden transition-all duration-200 ${scanFlash ? 'border-green-500 shadow-[0px_0px_30px_rgba(34,197,94,0.25)_inset]' : 'border-cyan-500'}`}>
-              
               <div className="flex justify-between items-center mb-2 md:mb-4 border-b border-gray-700 pb-2 shrink-0">
-                <h3 className="text-lg md:text-xl font-bold text-cyan-400">
-                  {showHistory ? "Scan History" : "Latest Scan"}
-                </h3>
-                <button 
-                  onClick={() => setShowHistory(!showHistory)}
-                  className="bg-gray-700 text-white px-3 py-1 text-xs md:text-sm rounded hover:bg-gray-600 transition"
-                >
+                <h3 className="text-lg md:text-xl font-bold text-cyan-400">{showHistory ? "Scan History" : "Latest Scan"}</h3>
+                <button onClick={() => setShowHistory(!showHistory)} className="bg-gray-700 text-white px-3 py-1 text-xs md:text-sm rounded hover:bg-gray-600 transition">
                   {showHistory ? "Back to Preview" : `History (${scannedHistory.length})`}
                 </button>
               </div>
-              
               {!showHistory ? (
-                /* DETAILED LATEST SCAN PREVIEW (Internally Scrollable) */
                 <div className="flex-1 overflow-y-auto pr-2">
                   {lastScannedOrder ? (
                     <div className="bg-gray-800 p-3 md:p-4 rounded-lg border border-cyan-400 flex flex-col min-h-full">
@@ -533,7 +631,6 @@ export default function POSDashboard() {
                         <p className="text-gray-300 font-mono text-sm md:text-base mb-1">{cleanPhoneNumber(lastScannedOrder.cells[4]?.value || "")}</p>
                         <p className="text-gray-400 text-xs md:text-sm whitespace-pre-wrap leading-tight">{lastScannedOrder.cells[5]?.value || "No Address"}</p>
                       </div>
-
                       <div className="mb-3 bg-gray-900 p-2 md:p-3 rounded">
                         <p className="font-bold text-gray-400 text-[10px] md:text-xs uppercase mb-1 border-b border-gray-700 pb-1">Products</p>
                         {extractProducts(lastScannedOrder.cells).length === 0 ? (
@@ -547,8 +644,6 @@ export default function POSDashboard() {
                           ))
                         )}
                       </div>
-
-                      {/* RED FLAG WARNING SYSTEM FOR NOTES */}
                       {lastScannedOrder.colC && (
                         <div className={`mb-3 p-2 md:p-3 rounded border transition-colors ${/(hold|cancelled|cancel|see message|see wa|call before dispatch)/i.test(lastScannedOrder.colC) ? 'bg-red-950/60 border-red-500' : 'bg-gray-700 border-gray-600'}`}>
                           <p className={`text-[10px] md:text-xs uppercase font-bold mb-1.5 ${/(hold|cancelled|cancel|see message|see wa|call before dispatch)/i.test(lastScannedOrder.colC) ? 'text-red-400' : 'text-gray-400'}`}>
@@ -559,41 +654,28 @@ export default function POSDashboard() {
                               const noteText = lastScannedOrder.colC;
                               const flagRegex = /(hold|cancelled|cancel|see message|see wa|call before dispatch)/gi;
                               const parts = noteText.split(flagRegex);
-                              
                               return parts.map((part, i) => {
                                 const isFlag = /^(hold|cancelled|cancel|see message|see wa|call before dispatch)$/i.test(part);
-                                if (isFlag) {
-                                  return (
-                                    <span key={i} className="inline-block bg-red-600 text-white px-2 py-0.5 rounded font-black uppercase tracking-wider shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-red-400 animate-pulse mx-1">
-                                      {part}
-                                    </span>
-                                  );
-                                }
+                                if (isFlag) return <span key={i} className="inline-block bg-red-600 text-white px-2 py-0.5 rounded font-black uppercase tracking-wider shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-red-400 animate-pulse mx-1">{part}</span>;
                                 return <span key={i}>{part}</span>;
                               });
                             })()}
                           </p>
                         </div>
                       )}
-
                       <div className="mt-auto p-2 bg-gray-900 rounded border-l-4 border-green-500 text-xs text-gray-300 flex items-center gap-2">
                         <span className="text-green-500 font-bold text-sm">✓</span> 
                         <span>Marked Cyan in Google Sheets</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="h-full flex items-center justify-center text-gray-500 italic text-sm text-center">
-                      Waiting for package scan...
-                    </div>
+                    <div className="h-full flex items-center justify-center text-gray-500 italic text-sm text-center">Waiting for package scan...</div>
                   )}
                 </div>
               ) : (
-                /* HISTORY LIST (Internally Scrollable) */
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                   {scannedHistory.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-gray-500 italic text-sm text-center">
-                      No scanning history yet.
-                    </div>
+                    <div className="h-full flex items-center justify-center text-gray-500 italic text-sm text-center">No scanning history yet.</div>
                   ) : (
                     scannedHistory.map((order, i) => (
                       <div key={i} className={`p-3 rounded border-l-4 ${i === 0 ? 'bg-gray-800 border-cyan-400' : 'bg-gray-800/50 border-gray-500'}`}>
@@ -608,15 +690,186 @@ export default function POSDashboard() {
                 </div>
               )}
             </div>
-            
           </div>
         </div>
       )}
 
       {/* ========================================== */}
-      {/* POS PRINTER UI (Optimized for Compact)       */}
+      {/* VIEW 4: FACTORY PRODUCTION REPORT SPREADSHEET */}
+      {/* NOTE: 'print:hidden' completely removes this screen from the paper! */}
+      {/* ========================================== */}
+      {activeView === "factoryReport" && (
+        <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans print:hidden select-none">
+          <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-lg border border-gray-300 flex flex-col h-[85vh]">
+            
+            <div className="bg-white border-b border-gray-300 p-4 shrink-0">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-green-600 text-white p-2 rounded shadow-sm">📊</div>
+                  <h2 className="text-xl font-bold text-gray-800">Factory Production Sheet</h2>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => window.print()} className="bg-gray-100 border border-gray-300 text-gray-700 px-4 py-1.5 rounded hover:bg-gray-200 text-sm font-semibold transition">
+                    🖨️ Print {selectedFactoryRows.length > 0 ? "Selected" : "All"}
+                  </button>
+                  <button onClick={() => { setSelectedFactoryRows([]); setActiveView("main"); }} className="bg-red-50 text-red-600 border border-red-200 px-4 py-1.5 rounded hover:bg-red-100 text-sm font-semibold transition">
+                    Close Sheet
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-md overflow-hidden">
+                  <span className="px-3 text-gray-400">fx</span>
+                  <input 
+                    type="text" 
+                    placeholder="Filter variants (e.g. 'snuggly black')..." 
+                    value={reportSearch}
+                    onChange={(e) => {
+                      setReportSearch(e.target.value);
+                      setSelectedFactoryRows([]);
+                      setRemovedNodes([]); // Reset exclusions on search change
+                    }}
+                    className="w-full p-2 outline-none text-sm font-mono"
+                  />
+                </div>
+                {removedNodes.length > 0 && (
+                   <button 
+                      onClick={() => setRemovedNodes([])} 
+                      className="ml-2 text-xs bg-gray-200 text-gray-700 px-3 py-2 rounded hover:bg-gray-300 transition shrink-0 font-bold"
+                   >
+                      ↺ Restore {removedNodes.length} removed
+                   </button>
+                )}
+              </div>
+              
+              {selectedFactoryRows.length > 0 && (
+                <p className="text-xs text-blue-600 font-semibold mt-2">
+                  {selectedFactoryRows.length} rows selected. Press Ctrl+C to copy to Sheets, or Ctrl+P to print.
+                </p>
+              )}
+            </div>
+
+            <div ref={scrollContainerRef} className="flex-1 overflow-auto bg-gray-100 flex flex-col justify-between relative">
+              <table className="w-full text-left border-collapse bg-white cursor-cell">
+                <thead className="sticky top-0 z-20 shadow-sm">
+                  <tr>
+                    <th className="w-12 bg-gray-100 border border-gray-300 p-2 text-center text-gray-400"></th>
+                    <th className="bg-gray-100 border border-gray-300 p-1.5 text-center text-xs font-semibold text-gray-600 select-none w-24">A (Rank)</th>
+                    <th className="bg-gray-100 border border-gray-300 p-1.5 text-center text-xs font-semibold text-gray-600 select-none">B (Product Variant)</th>
+                    <th className="bg-gray-100 border border-gray-300 p-1.5 text-center text-xs font-semibold text-gray-600 select-none w-32">C (Quantity)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consolidatedFactoryList.length === 0 ? (
+                    <tr><td colSpan={4} className="p-10 text-center text-gray-400 italic border border-gray-300">No data found.</td></tr>
+                  ) : (
+                    (() => {
+                      let currentProduct = "";
+                      let currentColor = "";
+
+                      return consolidatedFactoryList.map((item, index) => {
+                        const isSelected = selectedFactoryRows.includes(index);
+                        const isSearching = reportSearch.trim() !== "";
+
+                        const showProductHeader = isSearching && item.product !== currentProduct;
+                        const showColorHeader = isSearching && (item.product !== currentProduct || item.color !== currentColor);
+
+                        if (isSearching) {
+                            currentProduct = item.product;
+                            currentColor = item.color;
+                        }
+                        
+                        return (
+                          <React.Fragment key={index}>
+                            {showProductHeader && (
+                              <tr className="bg-gray-800 text-white">
+                                <td colSpan={4} className="p-0">
+                                  <div className="flex justify-between items-center px-4 py-2 group">
+                                    <span className="font-bold text-base uppercase tracking-wider">{item.product}</span>
+                                    <button 
+                                      onClick={() => setRemovedNodes(prev => [...prev, `P:${item.product}`])} 
+                                      className="text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-lg leading-none"
+                                      title={`Remove all ${item.product}`}
+                                    >✕</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            {showColorHeader && item.color && (
+                              <tr className="bg-gray-200 text-gray-800 border-b border-gray-300">
+                                <td colSpan={4} className="p-0">
+                                  <div className="flex justify-between items-center pl-8 pr-4 py-1.5 group">
+                                    <span className="font-bold text-sm text-gray-700">🎨 {item.color}</span>
+                                    <button 
+                                      onClick={() => setRemovedNodes(prev => [...prev, `C:${item.product}|${item.color}`])} 
+                                      className="text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-base leading-none"
+                                      title={`Remove ${item.color} color`}
+                                    >✕</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            <tr 
+                              data-index={index}
+                              className={`${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'} transition-colors`}
+                              onMouseDown={() => { setIsDragging(true); setDragStartIndex(index); setSelectedFactoryRows([index]); }}
+                              onMouseEnter={() => {
+                                if (isDragging && dragStartIndex !== null) {
+                                  const start = Math.min(dragStartIndex, index);
+                                  const end = Math.max(dragStartIndex, index);
+                                  const range = [];
+                                  for (let i = start; i <= end; i++) range.push(i);
+                                  setSelectedFactoryRows(range);
+                                }
+                              }}
+                            >
+                              <td className={`border border-gray-300 text-center text-xs text-gray-500 ${isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100'}`}>
+                                {index + 1}
+                              </td>
+                              <td className={`border border-gray-300 p-2 text-center text-sm text-gray-800 ${isSelected ? 'border-blue-300 text-blue-900' : ''}`}>
+                                {isSearching ? "" : index + 1}
+                              </td>
+                              <td className={`border border-gray-300 p-2 text-sm text-gray-800 ${isSelected ? 'border-blue-300 text-blue-900' : ''}`}>
+                                {isSearching ? <span className="pl-10 font-mono text-gray-500">↳ {item.size}</span> : item.name}
+                              </td>
+                              <td className={`border border-gray-300 p-2 pr-8 text-right text-sm font-medium text-gray-800 relative group ${isSelected ? 'border-blue-300 text-blue-900' : ''}`}>
+                                {item.qty}
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setRemovedNodes(prev => [...prev, `S:${item.name}`]); setSelectedFactoryRows([]); }} 
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center bg-white rounded shadow border border-gray-200"
+                                  title={`Remove ${item.size}`}
+                                >✕</button>
+                              </td>
+                            </tr>
+                          </React.Fragment>
+                        )
+                      })
+                    })()
+                  )}
+                </tbody>
+                <tfoot className="bg-orange-100 border-t-4 border-orange-400 sticky bottom-0 z-30 shadow-md">
+                  <tr>
+                    <td colSpan={3} className="p-3 text-right font-black text-orange-900 uppercase tracking-wider">
+                      Total Units:
+                    </td>
+                    <td className="p-3 pr-8 text-right font-black text-xl text-orange-900">
+                      {currentTotalUnits}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
       <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] mx-auto">
+        
+        {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
           .filter(order => selectedForPrint.includes(order.colB)) 
           .map((order, index) => {
@@ -629,25 +882,12 @@ export default function POSDashboard() {
           const products = extractProducts(order.cells);
 
           return (
-            <div 
-              key={index} 
-              className="flex flex-col py-0.5 border-b-2 border-dashed border-black mb-0.5 pb-0.5" 
-              style={{ pageBreakInside: 'avoid' }}
-            >
-              {/* ========================================== */}
-              {/* 1. TOP LOGO HEADER (Full Width)              */}
-              {/* ========================================== */}
+            <div key={index} className="flex flex-col py-0.5 border-b-2 border-dashed border-black mb-0.5 pb-0.5" style={{ pageBreakInside: 'avoid' }}>
               <div className="flex items-center justify-center gap-2 mb-0.5 pb-0.5 border-b-2 border-black">
                 <img src="/logo2.png" alt="Nitto Notun" className="h-6 w-auto object-contain brightness-0" />
                 <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
               </div>
-
-              {/* ========================================== */}
-              {/* 2. SIDE-BY-SIDE INFO & QR CODE               */}
-              {/* ========================================== */}
               <div className="flex justify-between items-start mb-2">
-                
-                {/* Left Side: Order Info & Customer Details */}
                 <div className="flex flex-col w-2/3 pr-0">
                   <p className="text-[11px] font-bold leading-none float-left">Order ID: {order.colB}</p>
                   <p className="text-[11px] font-bold leading-none float-left">{customerName}</p>
@@ -655,18 +895,10 @@ export default function POSDashboard() {
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
                 </div>
-
-                {/* Right Side: QR Code */}
                 <div className="w-1/3 flex justify-end">
-                  {/* Reduced size slightly to 64 so it fits perfectly next to text */}
                   <QRCodeCanvas value={order.colB} size={64} />
                 </div>
-                
               </div>
-
-              {/* ========================================== */}
-              {/* PRODUCTS & TOTAL                             */}
-              {/* ========================================== */}
               <div className="mb-0 border-t border-dashed border-black pt-1">
                 {products.length === 0 ? (
                    <p className="text-[8px] italic">No items found</p>
@@ -679,27 +911,94 @@ export default function POSDashboard() {
                   ))
                 )}
               </div>
-
               {order.colC && (
                 <p className="text-[8px] font-bold mb-0 pb-0">Note: {order.colC}</p>
               )}
-
               <div className="flex justify-between font-bold text-sm border-t border-black py-0">
                 <span>Total:</span>
                 <span>৳{totalAmount}</span>
               </div>
-
-              {/* ========================================== */}
-              {/* BRANDING FOOTER                              */}
-              {/* ========================================== */}
               <div className="flex flex-col items-center justify-center mt-0 mb-1 pt-0 pb-1 border-t border-dashed border-gray-400">
                 <p className="text-[8px] font-bold mt-1 text-center italic">Thanks for ordering at Nitto Notun.</p>
                 <p className="text-[7px] text-center mt-0.5">nittonotun.shop | +880 13062 86385</p>
               </div>
-              
             </div>
           );
         })}
+
+        {/* 2. FACTORY REPORT RECEIPT UI */}
+        {activeView === "factoryReport" && (
+          <div className="flex flex-col pb-2">
+            <div className="flex flex-col items-center justify-center mb-2 pb-2 border-b-2 border-black">
+              <h2 className="text-sm font-bold uppercase tracking-widest leading-tight text-center">Factory Report</h2>
+              <p className="text-[8px] mt-1">{new Date().toLocaleDateString('en-GB')}</p>
+            </div>
+            
+            <div className="mb-2">
+              {(() => {
+                const dataToPrint = selectedFactoryRows.length > 0 
+                  ? consolidatedFactoryList.filter((_, i) => selectedFactoryRows.includes(i))
+                  : consolidatedFactoryList;
+                
+                if(dataToPrint.length === 0) return <p className="text-[10px] text-center italic">No data selected</p>;
+
+                let currentProduct = "";
+                let currentColor = "";
+
+                return dataToPrint.map((item, i) => {
+                  const showProductHeader = item.product !== currentProduct;
+                  const showColorHeader = item.product !== currentProduct || item.color !== currentColor;
+
+                  if (showProductHeader) currentProduct = item.product;
+                  if (showColorHeader) currentColor = item.color;
+
+                  return (
+                    <React.Fragment key={i}>
+                      
+                      {/* PRINT PRODUCT HEADER */}
+                      {showProductHeader && (
+                        <div className="mt-2 mb-0.5 border-b border-black pb-0.5" style={{ pageBreakInside: 'avoid' }}>
+                          <span className="font-black text-[11px] uppercase tracking-wider">{item.product}</span>
+                        </div>
+                      )}
+                      
+                      {/* PRINT COLOR HEADER */}
+                      {showColorHeader && item.color && (
+                        <div className="mt-1 mb-0.5 ml-1" style={{ pageBreakInside: 'avoid' }}>
+                          <span className="font-bold text-[10px] italic">Color: {item.color}</span>
+                        </div>
+                      )}
+
+                      {/* PRINT SIZES (Indented) */}
+                      <div className="flex justify-between items-start border-b border-dashed border-gray-300 py-0.5 mb-0.5 ml-3" style={{ pageBreakInside: 'avoid' }}>
+                        <div className="flex flex-col w-4/5 pr-1">
+                          <span className="font-semibold text-[10px] leading-tight">Size: {item.size}</span>
+                        </div>
+                        <div className="w-1/5 text-right font-black text-[11px]">
+                          {item.qty}
+                        </div>
+                      </div>
+
+                    </React.Fragment>
+                  );
+                });
+              })()}
+            </div>
+            
+            <div className="flex justify-between font-bold text-xs border-t-2 border-black pt-1 mt-1">
+              <span>Total Units:</span>
+              <span>
+                {(() => {
+                  const dataToPrint = selectedFactoryRows.length > 0 
+                  ? consolidatedFactoryList.filter((_, i) => selectedFactoryRows.includes(i))
+                  : consolidatedFactoryList;
+                  return dataToPrint.reduce((sum, item) => sum + item.qty, 0);
+                })()}
+              </span>
+            </div>
+            <div className="mt-4 text-center text-[8px] italic">End of Report</div>
+          </div>
+        )}
       </div>
     </>
   );
