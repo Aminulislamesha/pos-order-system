@@ -57,9 +57,10 @@ export default function POSDashboard() {
   // Utility functions
   const cleanPhoneNumber = (phoneStr: string) => phoneStr ? phoneStr.replace(/^`/, '').trim() : "";
   
+  // FIXED: Dynamic length so it captures infinite items instead of stopping at 6
   const extractProducts = (cells: CellData[]) => {
     const products = [];
-    for (let i = 11; i <= 21; i += 2) {
+    for (let i = 11; i < cells.length; i += 2) {
       const productName = cells[i]?.value;
       const productQty = cells[i + 1]?.value;
       if (productName && String(productName).trim() !== "" && productName !== "NaN") {
@@ -140,11 +141,9 @@ export default function POSDashboard() {
       if (isNN) {
         const isNotExcluded = !/hold|cancelled|cancel/i.test(notes);
         
-        // Split by comma for strict standalone character checks
         const noteItems = notes.split(',').map(item => item.trim().toLowerCase());
         const hasRequiredCode = noteItems.includes('c') || noteItems.includes('m') || noteItems.includes('wa');
         
-        // NEW: Check if the note contains VU or D followed by a number
         const hasUrgentDispatch = /(?:vu|d|dispatch\s*)\d+/i.test(notes);
         
         return isNotExcluded && (hasRequiredCode || hasUrgentDispatch);
@@ -152,13 +151,10 @@ export default function POSDashboard() {
       return false; 
     });
 
-    // Helper function to extract the day from a VU or D tag
     const getDispatchDay = (note: string | null): number | null => {
       if (!note) return null;
-      // Match VU5, D5, Dispatch 5, etc. and capture the number
       const matches = [...note.matchAll(/(?:vu|d|dispatch\s*)(\d+)/ig)];
       if (matches.length > 0) {
-        // Find the lowest number if there are multiple (e.g. "VU5 or VU6" -> returns 5)
         const days = matches.map(m => parseInt(m[1], 10));
         return Math.min(...days);
       }
@@ -169,18 +165,12 @@ export default function POSDashboard() {
       const dayA = getDispatchDay(a.colC);
       const dayB = getDispatchDay(b.colC);
 
-      // 1. If both have urgent dispatch tags, sort by the day (e.g., 5 comes before 6)
       if (dayA !== null && dayB !== null) {
         if (dayA !== dayB) return dayA - dayB;
       }
-      
-      // 2. If A is urgent but B is not, A jumps to the top
       if (dayA !== null && dayB === null) return -1;
-      
-      // 3. If B is urgent but A is not, B jumps to the top
       if (dayA === null && dayB !== null) return 1;
 
-      // 4. Standard Date Sorting for everything else (or ties)
       const getTime = (serial: string | number) => {
         if (!serial) return 0;
         const num = Number(serial);
@@ -207,7 +197,6 @@ export default function POSDashboard() {
        extractProducts(order.cells).forEach(p => {
          let name = p.name.trim();
 
-         // Standardize Names & Fix Formats
          name = name.replace(/Solid Color Formal Pants/ig, 'Ladies Formal Pant')
                     .replace(/Office Black/ig, 'Black')
                     .replace(/Wide Legged Formal Pants/ig, 'Wide Leg Formal Pants');
@@ -245,12 +234,9 @@ export default function POSDashboard() {
 
     const searchTerms = reportSearch.toLowerCase().split(" ").filter(Boolean);
     const filtered = parsedList.filter(item => {
-      // Exclude manually removed hierarchy nodes
       if (removedNodes.includes(`P:${item.product}`)) return false;
       if (removedNodes.includes(`C:${item.product}|${item.color}`)) return false;
       if (removedNodes.includes(`S:${item.name}`)) return false;
-
-      // Ensure it matches search
       return searchTerms.every(term => item.name.toLowerCase().includes(term));
     });
 
@@ -282,11 +268,10 @@ export default function POSDashboard() {
   useEffect(() => {
     let animationFrame: number;
     
-    // Smooth Edge Scrolling Calculation
     const scrollLoop = () => {
         if (isDragging && mousePosRef.current && scrollContainerRef.current) {
             const rect = scrollContainerRef.current.getBoundingClientRect();
-            const edgeSize = 60; // Distance from edge to trigger scroll
+            const edgeSize = 60; 
             const maxSpeed = 15;
             let scrollSpeed = 0;
 
@@ -303,7 +288,6 @@ export default function POSDashboard() {
             if (scrollSpeed !== 0) {
                 scrollContainerRef.current.scrollTop += scrollSpeed;
                 
-                // Dynamically select rows as the container scrolls beneath the stationary mouse
                 const elem = document.elementFromPoint(mousePosRef.current.x, mousePosRef.current.y);
                 const tr = elem?.closest('tr[data-index]');
                 if (tr) {
@@ -335,7 +319,6 @@ export default function POSDashboard() {
 
     const handleMouseUp = () => setIsDragging(false);
 
-    // Ctrl+C Copy formatting
     const handleCopy = (e: ClipboardEvent) => {
       if (activeView === "factoryReport" && selectedFactoryRows.length > 0) {
         e.preventDefault(); 
@@ -765,7 +748,7 @@ export default function POSDashboard() {
                     onChange={(e) => {
                       setReportSearch(e.target.value);
                       setSelectedFactoryRows([]);
-                      setRemovedNodes([]); // Reset exclusions on search change
+                      setRemovedNodes([]); 
                     }}
                     className="w-full p-2 outline-none text-sm font-mono"
                   />
