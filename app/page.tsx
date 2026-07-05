@@ -684,8 +684,8 @@ export default function POSDashboard() {
                         ) : (
                           extractProducts(lastScannedOrder.cells).map((p, i) => (
                             <div key={i} className="flex justify-between text-xs md:text-sm text-gray-200 mb-1">
-                              <span className="w-4/5 break-words pr-1">{p.name}</span>
-                              <span className="w-1/5 text-right font-bold text-cyan-400">x{p.qty}</span>
+                              <span className="w-4/5 break-words">{p.name}</span>
+                              <span className="w-1/5 text-right font-bold text-cyan-400 pr-1">x{p.qty}</span>
                             </div>
                           ))
                         )}
