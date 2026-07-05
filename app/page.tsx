@@ -928,7 +928,7 @@ export default function POSDashboard() {
                 <div className="flex flex-col w-2/3 pr-0">
                   <p className="text-[11px] font-bold leading-none float-left">Order ID: {order.colB}</p>
                   <p className="text-[11px] font-bold leading-none float-left">{customerName}</p>
-                  <p className="text-[8px] mb-1.5 mt-0.5">Order date: {formatShortDate(order.colA)}</p>
+                  <p className="text-[9px] mb-1.5 mt-0.5">Order date: {formatShortDate(order.colA)}</p>
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
                 </div>
@@ -942,8 +942,8 @@ export default function POSDashboard() {
                 ) : (
                   products.map((item, i) => (
                     <div key={i} className="flex justify-between text-[9px] mb-0">
-                      <span className="w-4/5 pr-1 break-words">{item.name}</span>
-                      <span className="w-1/5 text-right font-bold">x{item.qty}</span>
+                      <span className="w-4/5 pr-1 text-[9px] break-words">{item.name}</span>
+                      <span className="w-1/5 text-right text-[9px] font-bold">x{item.qty}</span>
                     </div>
                   ))
                 )}
