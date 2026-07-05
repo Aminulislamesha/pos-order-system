@@ -119,6 +119,9 @@ export default function POSDashboard() {
     }
   };
 
+  // ==========================================
+  // PRINT FILTER & URGENT DISPATCH LOGIC
+  // ==========================================
   const openFilteredView = () => {
     const filtered = allOrders.filter((row) => {
       const orderId = String(row.colB || "").trim();
@@ -136,14 +139,48 @@ export default function POSDashboard() {
       if (isSC) return true; 
       if (isNN) {
         const isNotExcluded = !/hold|cancelled|cancel/i.test(notes);
+        
+        // Split by comma for strict standalone character checks
         const noteItems = notes.split(',').map(item => item.trim().toLowerCase());
         const hasRequiredCode = noteItems.includes('c') || noteItems.includes('m') || noteItems.includes('wa');
-        return isNotExcluded && hasRequiredCode;
+        
+        // NEW: Check if the note contains VU or D followed by a number
+        const hasUrgentDispatch = /(?:vu|d|dispatch\s*)\d+/i.test(notes);
+        
+        return isNotExcluded && (hasRequiredCode || hasUrgentDispatch);
       }
       return false; 
     });
 
+    // Helper function to extract the day from a VU or D tag
+    const getDispatchDay = (note: string | null): number | null => {
+      if (!note) return null;
+      // Match VU5, D5, Dispatch 5, etc. and capture the number
+      const matches = [...note.matchAll(/(?:vu|d|dispatch\s*)(\d+)/ig)];
+      if (matches.length > 0) {
+        // Find the lowest number if there are multiple (e.g. "VU5 or VU6" -> returns 5)
+        const days = matches.map(m => parseInt(m[1], 10));
+        return Math.min(...days);
+      }
+      return null;
+    };
+
     const sorted = filtered.sort((a, b) => {
+      const dayA = getDispatchDay(a.colC);
+      const dayB = getDispatchDay(b.colC);
+
+      // 1. If both have urgent dispatch tags, sort by the day (e.g., 5 comes before 6)
+      if (dayA !== null && dayB !== null) {
+        if (dayA !== dayB) return dayA - dayB;
+      }
+      
+      // 2. If A is urgent but B is not, A jumps to the top
+      if (dayA !== null && dayB === null) return -1;
+      
+      // 3. If B is urgent but A is not, B jumps to the top
+      if (dayA === null && dayB !== null) return 1;
+
+      // 4. Standard Date Sorting for everything else (or ties)
       const getTime = (serial: string | number) => {
         if (!serial) return 0;
         const num = Number(serial);
