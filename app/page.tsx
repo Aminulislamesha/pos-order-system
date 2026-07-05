@@ -976,16 +976,16 @@ export default function POSDashboard() {
                 ) : (
                   products.map((item, i) => (
                     <div key={i} className="flex justify-between text-[10px] mb-0">
-                      <span className="w-4/5 break-words">{item.name}</span>
-                      <span className="w-1/5 text-right font-bold pr-[1px]">x{item.qty}</span>
+                      <span className="w-9/10 break-words">{item.name}</span>
+                      <span className="w-1/10 text-center font-bold">x{item.qty}</span>
                     </div>
                   ))
                 )}
               </div>
               {order.colC && (
-                <p className="text-[10px] font-bold mb-0 pb-0">Note: {order.colC}</p>
+                <p className="text-[9px] font-bold mb-0 pb-0 pt-0.5">Note: {order.colC}</p>
               )}
-              <div className="flex justify-between font-bold text-sm border-t border-black py-0">
+              <div className="flex justify-between font-bold text-sm border-t border-black pr-3">
                 <span>Total:</span>
                 <span>৳{totalAmount}</span>
               </div>
