@@ -16,6 +16,7 @@ interface OrderRow {
   originalRowIndex: number;
   colA: string; 
   formattedDate: string; 
+  isoDate: string; // NEW: Added to track strict YYYY-MM-DD for date filtering
   colB: string;
   colC: string;
   cells: CellData[];
@@ -45,6 +46,7 @@ export default function POSDashboard() {
 
   // Factory Spreadsheet, Drag Selection & Hierarchy Removal State
   const [reportSearch, setReportSearch] = useState<string>(""); 
+  const [reportDate, setReportDate] = useState<string>(""); // NEW: State for Date Filter
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [selectedFactoryRows, setSelectedFactoryRows] = useState<number[]>([]);
   const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
@@ -57,7 +59,6 @@ export default function POSDashboard() {
   // Utility functions
   const cleanPhoneNumber = (phoneStr: string) => phoneStr ? phoneStr.replace(/^`/, '').trim() : "";
   
-  // FIXED: Dynamic length so it captures infinite items instead of stopping at 6
   const extractProducts = (cells: CellData[]) => {
     const products = [];
     for (let i = 11; i < cells.length; i += 2) {
@@ -99,6 +100,24 @@ export default function POSDashboard() {
     return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }); 
   };
 
+  // NEW: Helper function to extract a clean YYYY-MM-DD string for the Date Filter
+  const getISODate = (serial: string | number) => {
+    if (!serial) return "";
+    let dateObj: Date;
+    const numericSerial = Number(serial);
+    if (isNaN(numericSerial)) {
+      dateObj = new Date(String(serial));
+    } else {
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      dateObj = new Date(excelEpoch.getTime() + numericSerial * 86400000);
+    }
+    if (isNaN(dateObj.getTime())) return "";
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
@@ -108,7 +127,8 @@ export default function POSDashboard() {
 
       const ordersWithDates = json.data.map((row: any) => ({
         ...row,
-        formattedDate: formatGoogleDate(row.colA)
+        formattedDate: formatGoogleDate(row.colA),
+        isoDate: getISODate(row.colA) // Generate ISO date string
       }));
 
       setAllOrders(ordersWithDates);
@@ -187,11 +207,17 @@ export default function POSDashboard() {
   };
 
   // ==========================================
-  // FACTORY DATA CALCULATION (Filter + Sort)
+  // FACTORY DATA CALCULATION (Filter + Date + Sort)
   // ==========================================
   const consolidatedFactoryList = React.useMemo(() => {
     const totals: Record<string, number> = {};
-    const validOrders = allOrders.filter(o => !/cancelled|cancel/i.test(o.colC || ""));
+    
+    // NEW: Filter out cancelled AND enforce the Exact Date selected (if any)
+    const validOrders = allOrders.filter(o => {
+      const isNotCancelled = !/cancelled|cancel/i.test(o.colC || "");
+      const matchesDate = reportDate ? o.isoDate === reportDate : true;
+      return isNotCancelled && matchesDate;
+    });
     
     validOrders.forEach(order => {
        extractProducts(order.cells).forEach(p => {
@@ -258,7 +284,7 @@ export default function POSDashboard() {
       return getWeight(a.size) - getWeight(b.size);
     });
 
-  }, [allOrders, reportSearch, removedNodes]);
+  }, [allOrders, reportSearch, reportDate, removedNodes]);
 
   const currentTotalUnits = consolidatedFactoryList.reduce((sum, item) => sum + item.qty, 0);
 
@@ -738,8 +764,32 @@ export default function POSDashboard() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-md overflow-hidden">
+              <div className="flex flex-col md:flex-row items-center gap-2">
+                
+                {/* DATE FILTER & SEARCH BAR */}
+                <div className="flex items-center bg-white border border-gray-300 rounded-md overflow-hidden px-2 shadow-sm shrink-0 h-10 w-full md:w-auto">
+                  <span className="text-gray-400 text-lg mr-1">📅</span>
+                  <input 
+                    type="date" 
+                    value={reportDate}
+                    onChange={(e) => {
+                      setReportDate(e.target.value);
+                      setSelectedFactoryRows([]);
+                      setRemovedNodes([]);
+                    }}
+                    className="p-1 outline-none text-sm font-semibold text-gray-700 bg-transparent cursor-pointer w-full"
+                    title="Filter by Order Date"
+                  />
+                  {reportDate && (
+                    <button 
+                      onClick={() => { setReportDate(""); setSelectedFactoryRows([]); setRemovedNodes([]); }} 
+                      className="text-red-400 hover:text-red-600 font-bold px-2 ml-1"
+                      title="Clear Date Filter"
+                    >✕</button>
+                  )}
+                </div>
+
+                <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-md overflow-hidden shadow-sm h-10 w-full">
                   <span className="px-3 text-gray-400">fx</span>
                   <input 
                     type="text" 
@@ -750,13 +800,14 @@ export default function POSDashboard() {
                       setSelectedFactoryRows([]);
                       setRemovedNodes([]); 
                     }}
-                    className="w-full p-2 outline-none text-sm font-mono"
+                    className="w-full p-2 outline-none text-sm font-mono h-full"
                   />
                 </div>
+
                 {removedNodes.length > 0 && (
                    <button 
                       onClick={() => setRemovedNodes([])} 
-                      className="ml-2 text-xs bg-gray-200 text-gray-700 px-3 py-2 rounded hover:bg-gray-300 transition shrink-0 font-bold"
+                      className="text-xs bg-gray-200 text-gray-700 px-3 py-2 rounded hover:bg-gray-300 transition shrink-0 font-bold h-10"
                    >
                       ↺ Restore {removedNodes.length} removed
                    </button>
@@ -782,7 +833,7 @@ export default function POSDashboard() {
                 </thead>
                 <tbody>
                   {consolidatedFactoryList.length === 0 ? (
-                    <tr><td colSpan={4} className="p-10 text-center text-gray-400 italic border border-gray-300">No data found.</td></tr>
+                    <tr><td colSpan={4} className="p-10 text-center text-gray-400 italic border border-gray-300">No data found for this selection.</td></tr>
                   ) : (
                     (() => {
                       let currentProduct = "";
@@ -925,7 +976,7 @@ export default function POSDashboard() {
                 ) : (
                   products.map((item, i) => (
                     <div key={i} className="flex justify-between text-[10px] mb-0">
-                      <span className="w-4/5 break-words">{item.name}</span>
+                      <span className="w-4/5 pr-1 break-words">{item.name}</span>
                       <span className="w-1/5 text-right font-bold">x{item.qty}</span>
                     </div>
                   ))
@@ -951,7 +1002,7 @@ export default function POSDashboard() {
           <div className="flex flex-col pb-2">
             <div className="flex flex-col items-center justify-center mb-2 pb-2 border-b-2 border-black">
               <h2 className="text-sm font-bold uppercase tracking-widest leading-tight text-center">Factory Report</h2>
-              <p className="text-[8px] mt-1">{new Date().toLocaleDateString('en-GB')}</p>
+              <p className="text-[8px] mt-1">{reportDate ? reportDate : new Date().toLocaleDateString('en-GB')}</p>
             </div>
             
             <div className="mb-2">
