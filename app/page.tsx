@@ -1000,7 +1000,7 @@ export default function POSDashboard() {
                 ) : (
                   products.map((item, i) => (
                     <div key={i} className="flex justify-between text-[10px] mb-0">
-                      <span className="w-9/10 break-words">{item.name}</span>
+                      <span className="w-9/10 break-words leading-3">{item.name}</span>
                       <span className="w-1/10 text-center font-bold">x{item.qty}</span>
                     </div>
                   ))
