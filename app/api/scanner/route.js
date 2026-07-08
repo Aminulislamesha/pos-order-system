@@ -1,29 +1,26 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
-import path from 'path';
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { action, rowIndex, rowIndices } = body;
+    // NEW: We are now catching the 'orderId' sent from the frontend
+    const { action, rowIndex, rowIndices, orderId } = body;
 
     const auth = new google.auth.GoogleAuth({
-  // If the Vercel variables exist, use them. 
-  // (The .replace is necessary because Vercel sometimes messes up the line breaks in the key)
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY 
-      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') 
-      : undefined,
-  },
-  // If the variables don't exist (like on your laptop), it will try the file as a backup
-  keyFile: process.env.GOOGLE_PRIVATE_KEY ? undefined : "credentials.json",
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
+      credentials: {
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY 
+          ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+          : undefined,
+      },
+      keyFile: process.env.GOOGLE_PRIVATE_KEY ? undefined : "credentials.json",
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
 
     const sheets = google.sheets({ version: 'v4', auth });
     const SPREADSHEET_ID = '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4';
-    const SHEET_TAB_NAME = 'Today'; // Adjust this if your tab is named differently
+    const SHEET_TAB_NAME = 'Today'; 
 
     // 1. Dynamically find the correct sheetId
     const metaData = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
@@ -39,6 +36,30 @@ export async function POST(request) {
 
     // 2. Process Actions
     if (action === "color") {
+      let targetRowIndex = rowIndex; // Fallback to the original frontend index
+
+      // NEW: The Live Lookup Engine
+      // If we have an orderId, dynamically find its exact current row to prevent coloring empty cells
+      if (orderId) {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_TAB_NAME}!B:B`, // Look only at Column B (Order IDs)
+        });
+
+        const rows = response.data.values;
+        if (rows && rows.length > 0) {
+          // Find the live index. Google API uses 0-based indexing for batchUpdates.
+          const liveIndex = rows.findIndex(row => row[0] === orderId);
+          
+          if (liveIndex !== -1) {
+            targetRowIndex = liveIndex;
+          } else {
+             // If the order was deleted from the sheet between page load and scanning, abort safely!
+             throw new Error(`Order ${orderId} was not found in the live sheet. It may have been deleted.`);
+          }
+        }
+      }
+
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         requestBody: {
@@ -46,8 +67,8 @@ export async function POST(request) {
             updateCells: {
               range: {
                 sheetId: ACTUAL_SHEET_ID, 
-                startRowIndex: rowIndex,
-                endRowIndex: rowIndex + 1,
+                startRowIndex: targetRowIndex,       // Use the newly found live index
+                endRowIndex: targetRowIndex + 1,     
                 startColumnIndex: 0,
                 endColumnIndex: 26 
               },
@@ -64,7 +85,6 @@ export async function POST(request) {
       return NextResponse.json({ success: true });
     } 
     
-    // NEW: Apply Strikethrough instead of deleting
     else if (action === "strikethrough") {
       const strikethroughRequests = rowIndices.map(index => ({
         updateCells: {
@@ -91,7 +111,6 @@ export async function POST(request) {
       return NextResponse.json({ success: true });
     }
     
-    // Deletes rows permanently (used only by the Cyan delete button)
     else if (action === "delete") {
       const sortedIndices = [...rowIndices].sort((a, b) => b - a);
       const deleteRequests = sortedIndices.map(index => ({

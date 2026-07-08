@@ -44,6 +44,19 @@ export default function POSDashboard() {
   const [lastScannedOrder, setLastScannedOrder] = useState<OrderRow | null>(null);
   const [scanFlash, setScanFlash] = useState<boolean>(false);
 
+  // ==========================================
+  // REAL-TIME MEMORY REFS (Fixes Camera Stale State)
+  // ==========================================
+  const scannedIdsRef = useRef<string[]>([]);
+  const lastScannedOrderRef = useRef<OrderRow | null>(null);
+  const allOrdersRef = useRef<OrderRow[]>([]);
+
+  useEffect(() => {
+    scannedIdsRef.current = scannedIds;
+    lastScannedOrderRef.current = lastScannedOrder;
+    allOrdersRef.current = allOrders;
+  }, [scannedIds, lastScannedOrder, allOrders]);
+
   // Factory Spreadsheet, Drag Selection & Hierarchy Removal State
   const [reportSearch, setReportSearch] = useState<string>(""); 
   const [reportDates, setReportDates] = useState<string[]>([]); // UPDATED: Now an array for multiple dates
@@ -420,22 +433,43 @@ export default function POSDashboard() {
   }, [activeView]);
 
   const processScannedCode = (code: string) => {
-    const orderExists = allOrders.find(o => o.colB === code);
-    if (!orderExists) return; 
-    if (scannedIds.includes(code)) return; 
+    // 1. Silent Ignore: If you are holding the EXACT SAME paper from 1 second ago, do nothing.
+    if (lastScannedOrderRef.current?.colB === code) {
+      return; 
+    }
+
+    // 2. Alert: If you scan a package you already completed earlier today
+    if (scannedIdsRef.current.includes(code)) {
+      alert(`⚠️ ALREADY SCANNED: ${code} has already been scanned in this session.`);
+      return; 
+    }
+
+    // 3. Alert: If the order doesn't exist in memory at all (Ghost Package)
+    const orderExists = allOrdersRef.current.find(o => o.colB === code);
+    if (!orderExists) {
+      alert(`❌ ERROR: Order [${code}] not found in the system!\n\nPlease click "Force Refresh Data". If it still fails, check the Google Sheet to ensure the order wasn't deleted or altered.`);
+      return; 
+    } 
     
+    // Trigger visual success flash
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 500);
     
+    // Update local UI
     setScannedIds(prev => [...prev, code]);
     setLastScannedOrder(orderExists);
     setScannedHistory(prev => [orderExists, ...prev].slice(0, 10));
     setShowHistory(false);
     
+    // Fire and forget background fetch
     fetch("/api/scanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "color", rowIndex: orderExists.originalRowIndex })
+      body: JSON.stringify({ 
+        action: "color", 
+        rowIndex: orderExists.originalRowIndex,
+        orderId: code // <-- NEW: Sending the actual Order ID to fix the shifting row bug!
+      })
     }).catch(err => console.error("Failed to update Sheet color:", err));
   };
 
