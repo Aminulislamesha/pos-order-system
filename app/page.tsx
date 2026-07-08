@@ -715,11 +715,11 @@ export default function POSDashboard() {
             <button onClick={() => setActiveView("main")} className="bg-red-600 text-white px-4 py-1.5 md:px-6 md:py-2 rounded-md font-bold hover:bg-red-700 shadow-md text-sm md:text-base">Close</button>
           </div>
           <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative">
-            <div className={`relative h-[45%] md:h-auto md:flex-1 bg-gray-800 flex flex-col items-center justify-center p-1 md:p-4 border-b-4 md:border-b-0 md:border-r-4 transition-colors duration-200 ${scanFlash ? 'border-green-500 bg-green-900/30' : 'border-gray-700'}`}>
+            <div className={`relative h-[40%] md:h-auto md:flex-1 bg-gray-800 flex flex-col items-center justify-center p-1 md:p-4 border-b-4 md:border-b-0 md:border-r-4 transition-colors duration-200 ${scanFlash ? 'border-green-500 bg-green-900/30' : 'border-gray-700'}`}>
                <div id="reader" className="w-full h-full max-w-lg bg-black rounded-lg overflow-hidden flex items-center justify-center [&>video]:object-cover"></div>
                <p className="text-gray-400 mt-2 text-xs text-center hidden md:block">Use your camera or upload an image. Leave this screen open as long as you need to scan.</p>
             </div>
-            <div className={`h-[55%] md:h-auto w-full md:w-1/3 bg-gray-900 border-t-4 md:border-t-0 md:border-l-4 p-3 md:p-6 flex flex-col overflow-hidden transition-all duration-200 ${scanFlash ? 'border-green-500 shadow-[0px_0px_30px_rgba(34,197,94,0.25)_inset]' : 'border-cyan-500'}`}>
+            <div className={`h-[60%] md:h-auto w-full md:w-1/3 bg-gray-900 border-t-4 md:border-t-0 md:border-l-4 p-3 md:p-6 flex flex-col overflow-hidden transition-all duration-200 ${scanFlash ? 'border-green-500 shadow-[0px_0px_30px_rgba(34,197,94,0.25)_inset]' : 'border-cyan-500'}`}>
               <div className="flex justify-between items-center mb-2 md:mb-4 border-b border-gray-700 pb-2 shrink-0">
                 <h3 className="text-lg md:text-xl font-bold text-cyan-400">{showHistory ? "Scan History" : "Latest Scan"}</h3>
                 <button onClick={() => setShowHistory(!showHistory)} className="bg-gray-700 text-white px-3 py-1 text-xs md:text-sm rounded hover:bg-gray-600 transition">
