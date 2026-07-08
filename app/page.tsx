@@ -471,6 +471,26 @@ export default function POSDashboard() {
         orderId: code // <-- NEW: Sending the actual Order ID to fix the shifting row bug!
       })
     }).catch(err => console.error("Failed to update Sheet color:", err));
+    /* Use this code if you want to alert on backend errors, but it will slow down the scanning process 
+    // Fire and forget background fetch, but listen for backend errors
+    fetch("/api/scanner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        action: "color", 
+        rowIndex: orderExists.originalRowIndex,
+        orderId: code 
+      })
+    })
+    .then(async (res) => {
+      const data = await res.json();
+      if (!data.success) {
+        // This alerts you if the row shifted and couldn't be found!
+        alert(`❌ GOOGLE SHEETS ERROR: Could not color row cyan.\n\nReason: ${data.error}`);
+      }
+    })
+    .catch(err => console.error("Network failed to connect to server:", err));
+    */
   };
 
   const markAsPrinted = async () => {
