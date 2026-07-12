@@ -24,12 +24,13 @@ export async function GET() {
       fields: 'sheets.data.rowData.values(userEnteredValue,effectiveFormat(textFormat))'
     });
 
+    // Sort by chronological order using the numeric date score
     const rows = response.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
     // 1. Calculate Urgent Demand
     const urgentDemand = new Map<string, number>();
 
-    rows.forEach(row => {
+    rows.forEach((row: any) => {
       if (!row.values) return;
       
       const colB = row.values[1]?.userEnteredValue?.stringValue || row.values[1]?.userEnteredValue?.numberValue || "";
@@ -63,11 +64,11 @@ export async function GET() {
     const inventoryPool = new Map<string, number>(); // canonical ID -> total stock
     const aliasMap = new Map<string, string>(); // raw name lowercase -> canonical ID
 
-    products.forEach(p => {
-      const total = p.inventory.reduce((sum, inv) => sum + inv.quantity, 0);
+    products.forEach((p: any) => {
+      const total = p.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
       inventoryPool.set(p.id, total);
       aliasMap.set(p.name.toLowerCase(), p.id);
-      p.aliases.forEach(a => aliasMap.set(a.alias.toLowerCase(), p.id));
+      p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p.id));
     });
 
     // 3. Compare Urgent Demand vs Inventory to find Shortages
