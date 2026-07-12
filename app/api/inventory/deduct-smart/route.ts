@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     // [ { productId, locationId, qty, reason: "Order 1234" } ]
 
     // Process all deductions in a single transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       for (const req of allocations) {
         const { productId, locationId, qty } = req;
         const numQty = parseInt(qty, 10);
