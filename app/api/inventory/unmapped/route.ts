@@ -29,7 +29,7 @@ export async function GET() {
     const rows = response.data.sheets?.[0]?.data?.[0]?.rowData || [];
     const uniqueRawNames = new Set<string>();
 
-    rows.forEach(row => {
+    rows.forEach((row: any) => {
       if (!row.values) return;
       // Products start at column L (index 11) and alternate with quantities
       for (let i = 11; i < row.values.length; i += 2) {
@@ -48,8 +48,8 @@ export async function GET() {
     const aliases = await prisma.productAlias.findMany({ select: { alias: true } });
 
     const knownNames = new Set([
-      ...products.map(p => p.name.toLowerCase()),
-      ...aliases.map(a => a.alias.toLowerCase())
+      ...products.map((p: any) => p.name.toLowerCase()),
+      ...aliases.map((a: any) => a.alias.toLowerCase())
     ]);
 
     const finalUnmapped: string[] = [];

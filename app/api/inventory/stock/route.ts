@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     // Run in a transaction to ensure log and inventory are updated together
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Upsert Inventory record
       const existingInventory = await tx.inventory.findUnique({
         where: { locationId_productId: { locationId, productId } }

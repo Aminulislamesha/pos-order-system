@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const excludeParam = url.searchParams.get('exclude');
-    const excludedOrderIds = excludeParam ? excludeParam.split(',').map(id => id.trim()) : [];
+    const excludedOrderIds = excludeParam ? excludeParam.split(',').map((id: any) => id.trim()) : [];
     // 1. Fetch Google Sheets Orders (Same logic as api/orders)
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -31,9 +31,9 @@ export async function GET(request: Request) {
     const rows = response.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
     // Parse and format orders
-    let allOrders: any[] = rows.map((row, rowIndex) => {
+    let allOrders: any[] = rows.map((row: any, rowIndex: number) => {
       if (!row.values) return null;
-      const cells = row.values.map(cell => {
+      const cells = row.values.map((cell: any) => {
         const value = cell.formattedValue || cell.userEnteredValue?.stringValue || cell.userEnteredValue?.numberValue || "";
         const isStrikethrough = cell.effectiveFormat?.textFormat?.strikethrough || false;
         return { value: String(value), strikethrough: isStrikethrough };
@@ -123,17 +123,16 @@ export async function GET(request: Request) {
 
     // Build Alias Map: raw string (lowercase) -> Canonical Product
     const aliasMap = new Map<string, any>();
-    products.forEach(p => {
+    const inventoryPool = new Map<string, { total: number, locs: any[] }>();
+    products.forEach((p: any) => {
       aliasMap.set(p.name.toLowerCase(), p);
-      p.aliases.forEach(a => aliasMap.set(a.alias.toLowerCase(), p));
+      p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p));
     });
 
     // Build running inventory pool
-    // productId -> { total: number, locations: [{locationId, quantity}] }
-    const inventoryPool = new Map<string, { total: number, locs: any[] }>();
-    products.forEach(p => {
-      const total = p.inventory.reduce((sum, inv) => sum + inv.quantity, 0);
-      const locs = p.inventory.map(inv => ({ ...inv })); // shallow copy so we can mutate
+    products.forEach((p: any) => {
+      const total = p.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
+      const locs = p.inventory.map((inv: any) => ({ ...inv })); // shallow copy so we can mutate
       inventoryPool.set(p.id, { total, locs });
     });
 

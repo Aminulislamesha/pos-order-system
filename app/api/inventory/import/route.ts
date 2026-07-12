@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const headerRow = sheet.getRow(1);
     let nameCol = -1, locCol = -1, qtyCol = -1;
     
-    headerRow.eachCell((cell, colNumber) => {
+    headerRow.eachCell((cell: any, colNumber: number) => {
       const val = String(cell.value || '').trim().toLowerCase();
       if (val === 'name' || val === 'product name') nameCol = colNumber;
       if (val === 'location' || val === 'location name') locCol = colNumber;
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
     // Read data
     const rows: { name: string, loc: string, qty: number }[] = [];
-    sheet.eachRow((row, rowNumber) => {
+    sheet.eachRow((row: any, rowNumber: number) => {
       if (rowNumber === 1) return; // skip header
       const name = String(row.getCell(nameCol).value || '').trim();
       const loc = String(row.getCell(locCol).value || '').trim();
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
     // 1. Process Locations
     // Find missing locations and create them
-    const uniqueLocNames = Array.from(new Set(rows.map(r => r.loc)));
+    const uniqueLocNames = Array.from(new Set(rows.map((r: any) => r.loc)));
     const existingLocations = await prisma.location.findMany();
     const locMap = new Map<string, string>(); // name (lowercase) -> id
     
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Process Products
-    const uniqueProductNames = Array.from(new Set(rows.map(r => r.name)));
+    const uniqueProductNames = Array.from(new Set(rows.map((r: any) => r.name)));
     const existingProducts = await prisma.product.findMany();
     const prodMap = new Map<string, string>(); // name (lowercase) -> id
 

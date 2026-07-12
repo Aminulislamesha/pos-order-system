@@ -62,7 +62,7 @@ export async function DELETE(request: Request) {
       where: { locationId: id }
     });
     
-    const totalQty = inventory.reduce((sum, item) => sum + item.quantity, 0);
+    const totalQty = inventory.reduce((sum: number, item: any) => sum + item.quantity, 0);
     
     if (totalQty > 0) {
       return NextResponse.json({ success: false, error: "Cannot delete location. It still contains ${totalQty} items in stock." }, { status: 400 });
