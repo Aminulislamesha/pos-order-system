@@ -25,7 +25,7 @@ export default async function LocationPage({ params }: { params: { uid: string }
     );
   }
 
-  const totalQty = location.inventory.reduce((sum, inv) => sum + inv.quantity, 0);
+  const totalQty = location.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
