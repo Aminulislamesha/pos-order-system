@@ -112,11 +112,11 @@ export async function GET() {
       const currentStock = inventoryPool.get(canonicalId) || 0;
       if (currentStock < demand) {
         // Map the shortage back to the canonical product name so frontend can match it
-        const product = products.find(p => p.id === canonicalId);
+        const product = products.find((p: any) => p.id === canonicalId);
         if (product) {
           finalShortages[product.name.toLowerCase()] = demand - currentStock;
           // Also map the aliases to the same shortage so frontend can match raw names
-          product.aliases.forEach(a => {
+          product.aliases.forEach((a: any) => {
             finalShortages[a.alias.toLowerCase()] = demand - currentStock;
           });
         }
