@@ -20,6 +20,9 @@ export default function ProductsTab() {
   
   // Viewing Locations State
   const [viewingLocationsProductId, setViewingLocationsProductId] = useState('');
+  const [addingLocationProductId, setAddingLocationProductId] = useState('');
+  const [addLocationSearch, setAddLocationSearch] = useState('');
+  const [addLocationId, setAddLocationId] = useState('');
 
   // For Aliases
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -166,6 +169,32 @@ export default function ProductsTab() {
     }
   };
 
+  const handleAddLocation = async (productId: string) => {
+    if (!addLocationId && !addLocationSearch.trim()) return alert("Select an existing location or type a new name.");
+    try {
+      const res = await fetch('/api/inventory/assign-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId,
+          locationId: addLocationId || undefined,
+          locationName: !addLocationId ? addLocationSearch.trim() : undefined
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAddingLocationProductId('');
+        setAddLocationId('');
+        setAddLocationSearch('');
+        fetchLocalData();
+      } else {
+        alert(data.error);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (loading) return <div>Loading products...</div>;
 
   // Smart Location Search
@@ -281,6 +310,74 @@ export default function ProductsTab() {
                   ) : (
                     <p className="text-sm text-gray-500 italic">No stock found in any location.</p>
                   )}
+                  
+                  <div className="mt-3 pt-3 border-t border-blue-100 flex flex-col gap-2">
+                    {!addingLocationProductId || addingLocationProductId !== p.id ? (
+                      <button 
+                        onClick={() => {
+                          setAddingLocationProductId(p.id);
+                          setAddLocationSearch('');
+                          setAddLocationId('');
+                        }}
+                        className="text-xs bg-blue-600 text-white font-bold px-3 py-1.5 rounded self-start hover:bg-blue-700 transition-colors"
+                      >
+                        + Add Location
+                      </button>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Search Location or type new name..." 
+                          className="border border-blue-300 p-2 text-sm rounded w-full text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={addLocationSearch}
+                          onChange={e => {
+                            setAddLocationSearch(e.target.value);
+                            const newFiltered = locations.filter(l => {
+                              const terms = e.target.value.toLowerCase().split(/\s+/);
+                              const searchable = `${l.name} ${l.uid}`.toLowerCase();
+                              return terms.every(t => searchable.includes(t));
+                            });
+                            if (newFiltered.length === 1 && newFiltered[0].name.toLowerCase() === e.target.value.toLowerCase().trim()) {
+                              setAddLocationId(newFiltered[0].id);
+                            } else {
+                              setAddLocationId('');
+                            }
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <select 
+                            className="border border-blue-300 p-2 text-sm rounded flex-1 text-gray-900 bg-white min-w-0"
+                            value={addLocationId}
+                            onChange={e => {
+                              setAddLocationId(e.target.value);
+                              const loc = locations.find(l => l.id === e.target.value);
+                              if (loc) setAddLocationSearch(loc.name);
+                            }}
+                          >
+                            <option value="">{addLocationSearch.trim() ? `-- Create New Location: "${addLocationSearch.trim()}" --` : '-- Choose Existing Location --'}</option>
+                            {locations.filter(l => {
+                              if (!addLocationSearch.trim()) return true;
+                              const terms = addLocationSearch.toLowerCase().split(/\s+/);
+                              const searchable = `${l.name} ${l.uid}`.toLowerCase();
+                              return terms.every(t => searchable.includes(t));
+                            }).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                          </select>
+                          <button 
+                            onClick={() => handleAddLocation(p.id)} 
+                            className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 text-sm shrink-0"
+                          >
+                            Save
+                          </button>
+                          <button 
+                            onClick={() => setAddingLocationProductId('')} 
+                            className="bg-gray-200 text-gray-800 px-3 py-2 rounded font-bold hover:bg-gray-300 text-sm shrink-0"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

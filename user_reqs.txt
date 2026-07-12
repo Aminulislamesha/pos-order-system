@@ -1,0 +1,46 @@
+2026-07-12T06:41:41Z <USER_REQUEST>
+Again error: 
+Build log:
+12:36:15.391 Running build in Washington, D.C., USA (East) – iad1
+12:36:15.392 Build machine configuration: 2 cores, 8 GB
+12:36:15.574 Cloning github.com/Aminulislamesha/pos-order-system (Branch: main, Commit: 9d27faf)
+12:36:15.833 Cloning completed: 259.000ms
+12:36:16.413 Restored build cache from previous deployment (HQuBXnYPxMionfUGAPo7uateQyPj)
+12:36:16.630 Running "vercel build"
+12:36:16.649 Vercel CLI 55.0.0
+12:36:17.023 Installing dependencies...
+12
+2026-07-12T06:47:13Z <USER_REQUEST>
+still getting error:
+build log:
+12:43:53.605 Running build in Washington, D.C., USA (East) – iad1
+12:43:53.605 Build machine configuration: 2 cores, 8 GB
+12:43:53.733 Cloning github.com/Aminulislamesha/pos-order-system (Branch: main, Commit: c52f93a)
+12:43:53.936 Cloning completed: 203.000ms
+12:43:54.694 Restored build cache from previous deployment (HQuBXnYPxMionfUGAPo7uateQyPj)
+12:43:54.900 Running "vercel build"
+12:43:54.922 Vercel CLI 55.0.0
+12:43:55.358 Installing dependencie
+2026-07-12T06:51:33Z <USER_REQUEST>
+again getting error: 
+build log:
+12:49:09.224 Running build in Washington, D.C., USA (East) – iad1
+12:49:09.225 Build machine configuration: 2 cores, 8 GB
+12:49:09.343 Cloning github.com/Aminulislamesha/pos-order-system (Branch: main, Commit: 2eabb6b)
+12:49:09.577 Cloning completed: 233.000ms
+12:49:10.290 Restored build cache from previous deployment (HQuBXnYPxMionfUGAPo7uateQyPj)
+12:49:10.635 Running "vercel build"
+12:49:10.703 Vercel CLI 55.0.0
+12:49:11.072 Installing dependenci
+2026-07-12T11:07:17Z <USER_REQUEST>
+Yeah, thanks it worked finally. 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-07-12T17:07:17+06:00.
+</ADDITIONAL_METADATA>
+2026-07-12T11:09:13Z <USER_REQUEST>
+Ohh, what did i told you about the factory report you remember? 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-07-12T17:09:13+06:00.
+</ADDITIONAL_METADATA>
