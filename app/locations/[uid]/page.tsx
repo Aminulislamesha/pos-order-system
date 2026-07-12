@@ -63,7 +63,7 @@ export default async function LocationPage({ params }: { params: { uid: string }
                   </tr>
                 </thead>
                 <tbody>
-                  {location.inventory.map(inv => (
+                  {location.inventory.map((inv: any) => (
                     <tr key={inv.id} className="border-b last:border-b-0 hover:bg-blue-50 transition-colors">
                       <td className="p-4">
                         <span className={`px-2 py-1 text-xs font-bold rounded ${inv.product.type === 'SUPPLY' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
