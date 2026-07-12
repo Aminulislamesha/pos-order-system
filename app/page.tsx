@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { QRCodeCanvas } from 'qrcode.react'; 
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import ReadyToPackageView from './ReadyToPackageView';
 
 interface CellData {
   value: string;
@@ -37,7 +38,7 @@ export default function POSDashboard() {
   // UI State
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"main" | "printFilter" | "scanner" | "factoryReport">("main");
+  const [activeView, setActiveView] = useState<"main" | "printFilter" | "scanner" | "factoryReport" | "readyToPackage">("main");
   
   // Toggle for Scanner History & Visuals
   const [showHistory, setShowHistory] = useState<boolean>(false);
@@ -556,6 +557,8 @@ export default function POSDashboard() {
                 <button onClick={() => setActiveView("scanner")} className="bg-purple-600 text-white px-6 py-2 rounded-md font-bold hover:bg-purple-700 shadow-md">📷 Start Scanning</button>
                 <button onClick={openFilteredView} className="bg-blue-600 text-white px-6 py-2 rounded-md font-bold hover:bg-blue-700 shadow-md">🖨️ Open Ready to Print</button>
                 <button onClick={() => setActiveView("factoryReport")} className="bg-orange-600 text-white px-6 py-2 rounded-md font-bold hover:bg-orange-700 shadow-md">🏭 Factory Report</button>
+                <button onClick={() => window.location.href = '/inventory'} className="bg-teal-600 text-white px-6 py-2 rounded-md font-bold hover:bg-teal-700 shadow-md">🗄️ Inventory Dashboard</button>
+                <button onClick={() => setActiveView("readyToPackage")} className="bg-green-600 text-white px-6 py-2 rounded-md font-bold hover:bg-green-700 shadow-md">📦 Ready to Package</button>
                 <button onClick={fetchOrders} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition shadow-sm">Force Refresh Data</button>
               </div>
             </div>
@@ -1016,7 +1019,7 @@ export default function POSDashboard() {
       {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
-      <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] mx-auto">
+      <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] mx-auto absolute top-0 left-0">
         
         {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
@@ -1154,6 +1157,11 @@ export default function POSDashboard() {
           </div>
         )}
       </div>
+
+      {/* Ready To Package View */}
+      {activeView === "readyToPackage" && (
+        <ReadyToPackageView onBack={() => setActiveView("main")} />
+      )}
     </>
   );
 }

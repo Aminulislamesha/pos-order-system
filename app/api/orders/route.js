@@ -24,7 +24,7 @@ export async function GET() {
       spreadsheetId: '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4',
       ranges: ['Today!A:Z'], // Make sure this matches your tab name
       includeGridData: true,
-      fields: 'sheets.data.rowData.values(userEnteredValue,effectiveFormat(backgroundColor,textFormat),note)'
+      fields: 'sheets.data.rowData.values(userEnteredValue,formattedValue,effectiveFormat(backgroundColor,textFormat),note)'
     });
 
     const rows = response.data.sheets[0]?.data[0]?.rowData || [];
@@ -33,7 +33,7 @@ export async function GET() {
       if (!row.values) return null;
 
       const cells = row.values.map(cell => {
-        const value = cell.userEnteredValue?.stringValue || cell.userEnteredValue?.numberValue || "";
+        const value = cell.formattedValue || cell.userEnteredValue?.stringValue || cell.userEnteredValue?.numberValue || "";
         const bgColor = cell.effectiveFormat?.backgroundColor;
         const fgColor = cell.effectiveFormat?.textFormat?.foregroundColor;
         
