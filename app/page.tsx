@@ -250,12 +250,19 @@ export default function POSDashboard() {
   // ==========================================
   const consolidatedFactoryList = React.useMemo(() => {
     const parsedList = factoryData.factoryList.map((item: any) => {
-       const splitIndex = item.name.lastIndexOf(' / ');
+       let splitIndex = item.name.lastIndexOf(' / ');
        let baseName = item.name;
        let size = "N/A";
        if (splitIndex !== -1) {
          baseName = item.name.substring(0, splitIndex).trim();
          size = item.name.substring(splitIndex + 3).trim();
+       } else {
+         // Fallback: try splitting by comma if no slash exists (e.g. "Color: Navy Blue, XXL")
+         const commaSplitIndex = item.name.lastIndexOf(',');
+         if (commaSplitIndex !== -1) {
+           baseName = item.name.substring(0, commaSplitIndex).trim();
+           size = item.name.substring(commaSplitIndex + 1).trim();
+         }
        }
 
        let product = baseName;
@@ -1176,7 +1183,7 @@ export default function POSDashboard() {
                           <span className="font-semibold text-[12px] leading-tight">Size: {item.size}</span>
                         </div>
                         <div className="w-1/5 text-right font-black text-[13px]">
-                          {item.qty}
+                          {item.qty} {item.qty > 1 ? 'pcs' : 'pc'}
                         </div>
                       </div>
 

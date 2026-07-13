@@ -191,6 +191,7 @@ export default function ProductsTab() {
         setQuickAddLocationId('');
         setQuickAddQty('');
         setQuickAddLocationSearch('');
+        fetchLocalData();
         alert("Stock added successfully!");
       } else {
         alert(data.error);
@@ -450,29 +451,37 @@ export default function ProductsTab() {
                       }
                     }}
                   />
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 relative">
                     <select 
-                      className="border p-2 text-sm rounded flex-1 text-gray-900 bg-white min-w-0"
+                      className={`border p-2 text-sm rounded flex-1 text-gray-900 bg-white min-w-0 ${quickAddLocationSearch ? 'absolute z-10 top-full left-0 w-full max-h-48 shadow-lg' : ''}`}
+                      size={quickAddLocationSearch ? Math.min(6, filteredLocations.length + 1) : undefined}
                       value={quickAddLocationId}
-                      onChange={e => setQuickAddLocationId(e.target.value)}
+                      onChange={e => {
+                        setQuickAddLocationId(e.target.value);
+                        if (e.target.value) setQuickAddLocationSearch('');
+                      }}
                     >
                       <option value="">-- Choose Location --</option>
                       {filteredLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
-                    <input 
-                      type="number" 
-                      min="1"
-                      placeholder="Qty" 
-                      className="border p-2 text-sm rounded w-20 text-gray-900 shrink-0"
-                      value={quickAddQty}
-                      onChange={e => setQuickAddQty(e.target.value)}
-                    />
-                    <button 
-                      onClick={() => handleQuickAddStock(p.id)} 
-                      className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 text-sm shrink-0"
-                    >
-                      Add
-                    </button>
+                    {!quickAddLocationSearch && (
+                      <>
+                        <input 
+                          type="number" 
+                          min="1"
+                          placeholder="Qty" 
+                          className="border p-2 text-sm rounded w-20 text-gray-900 shrink-0"
+                          value={quickAddQty}
+                          onChange={e => setQuickAddQty(e.target.value)}
+                        />
+                        <button 
+                          onClick={() => handleQuickAddStock(p.id)} 
+                          className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 text-sm shrink-0"
+                        >
+                          Add
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
