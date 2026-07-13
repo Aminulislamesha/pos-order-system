@@ -965,7 +965,16 @@ export default function POSDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {consolidatedFactoryList.length === 0 ? (
+                  {factoryLoading ? (
+                    <tr>
+                      <td colSpan={4} className="p-10 border border-gray-300">
+                        <div className="flex flex-col items-center justify-center gap-3 py-4">
+                          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-gray-500 font-semibold animate-pulse">Fetching factory data...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : consolidatedFactoryList.length === 0 ? (
                     <tr><td colSpan={4} className="p-10 text-center text-gray-400 italic border border-gray-300">No data found for this selection.</td></tr>
                   ) : (
                     (() => {
