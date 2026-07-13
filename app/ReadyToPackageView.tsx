@@ -407,7 +407,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                             ) : !o.isFulfillable && o.isPriority ? (
                               <div className="flex flex-col gap-1">
                                 <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full inline-block w-fit">
-                                  VIP SHORTAGE
+                                  VU SHORTAGE
                                 </span>
                                 {o.items.filter((i: any) => i.shortage > 0).map((item: any, idx: number) => (
                                   <div key={idx} className="text-[10px] text-red-700 font-bold leading-tight bg-red-100 p-1 rounded">
@@ -539,7 +539,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
 
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) FOR READY TO PACKAGE */}
       {printMode === 'pos' && (
-        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] mx-auto absolute top-0 left-0">
+        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[78mm] max-w-[78mm] overflow-hidden break-words mx-auto absolute top-0 left-0">
           {orders.filter(order => selectedOrders.includes(order.orderId)).map((order, index) => {
             if (!order.cells) return null;
           const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
@@ -581,7 +581,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                 )}
               </div>
               {order.status && (
-                <p className="text-[9px] font-bold mb-0 pb-0 pt-0.5">Note: {order.status}</p>
+                <p className="text-[9px] font-bold mb-0 pb-0 pt-0.5 break-words whitespace-pre-wrap">Note: {order.status}</p>
               )}
               <div className="flex justify-between font-bold text-sm border-t border-black pr-3">
                 <span>Total:</span>
