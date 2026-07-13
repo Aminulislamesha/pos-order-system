@@ -60,7 +60,9 @@ export default function POSDashboard() {
 
   // Factory Spreadsheet, Drag Selection & Hierarchy Removal State
   const [reportSearch, setReportSearch] = useState<string>(""); 
-  const [reportDates, setReportDates] = useState<string[]>([]); // UPDATED: Now an array for multiple dates
+  const [activeFactoryFilters, setActiveFactoryFilters] = useState<string[]>([]);
+  const [factoryData, setFactoryData] = useState<{availableFilters: string[], orders: any[], factoryList: any[]}>({availableFilters: [], orders: [], factoryList: []});
+  const [factoryLoading, setFactoryLoading] = useState(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [selectedFactoryRows, setSelectedFactoryRows] = useState<number[]>([]);
   const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
@@ -88,6 +90,22 @@ export default function POSDashboard() {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  useEffect(() => {
+    if (activeView === "factoryReport") {
+      setFactoryLoading(true);
+      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.success) setFactoryData(json.data);
+          setFactoryLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setFactoryLoading(false);
+        });
+    }
+  }, [activeView, activeFactoryFilters]);
 
   const formatGoogleDate = (serial: string | number) => {
     if (!serial) return "";
@@ -230,41 +248,13 @@ export default function POSDashboard() {
   // FACTORY DATA CALCULATION (Filter + Date + Sort)
   // ==========================================
   const consolidatedFactoryList = React.useMemo(() => {
-    const totals: Record<string, number> = {};
-    
-    const validOrders = allOrders.filter(o => {
-      const isNotCancelled = !/cancelled|cancel/i.test(o.colC || "");
-      // UPDATED: Now checks if the array includes the date, or if array is empty (all dates)
-      const matchesDate = reportDates.length > 0 ? reportDates.includes(o.isoDate) : true;
-      return isNotCancelled && matchesDate;
-    });
-    
-    validOrders.forEach(order => {
-       extractProducts(order.cells).forEach(p => {
-         let name = p.name.trim();
-
-         name = name.replace(/Solid Color Formal Pants/ig, 'Ladies Formal Pant')
-                    .replace(/Office Black/ig, 'Black')
-                    .replace(/Wide Legged Formal Pants/ig, 'Wide Leg Formal Pants');
-         
-         name = name.replace(/-\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small)\s*,\s*([A-Za-z\s]+)$/i, '- $2 / $1');
-         name = name.replace(/\s*,\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small|Kid Size|Kid|[\d-]+\s*Years)$/i, ' / $1');
-         name = name.replace(/\bXXXL\b/ig, '3XL').replace(/\bXXL\b/ig, '2XL')
-                    .replace(/\bLarge\b/ig, 'L').replace(/\bMedium\b/ig, 'M').replace(/\bSmall\b/ig, 'S')
-                    .replace(/\bKid Size\b/ig, 'Kid');
-         
-         name = name.replace(/\s+/g, ' ').trim();
-         totals[name] = (totals[name] || 0) + (parseInt(p.qty) || 1);
-       });
-    });
-
-    const parsedList = Object.entries(totals).map(([name, qty]) => {
-       const splitIndex = name.lastIndexOf(' / ');
-       let baseName = name;
+    const parsedList = factoryData.factoryList.map((item: any) => {
+       const splitIndex = item.name.lastIndexOf(' / ');
+       let baseName = item.name;
        let size = "N/A";
        if (splitIndex !== -1) {
-         baseName = name.substring(0, splitIndex).trim();
-         size = name.substring(splitIndex + 3).trim();
+         baseName = item.name.substring(0, splitIndex).trim();
+         size = item.name.substring(splitIndex + 3).trim();
        }
 
        let product = baseName;
@@ -275,8 +265,9 @@ export default function POSDashboard() {
           color = baseName.substring(colorSplitIndex + 3).trim();
        }
 
-       return { name, baseName, product, color, size, qty };
+       return { name: item.name, baseName, product, color, size, qty: item.requiredQty };
     });
+    // Only needed for replacement alignment, keeping original lines removed.
 
     const searchTerms = reportSearch.toLowerCase().split(" ").filter(Boolean);
     const filtered = parsedList.filter(item => {
@@ -299,12 +290,10 @@ export default function POSDashboard() {
     return filtered.sort((a, b) => {
       if (productTotals[b.product] !== productTotals[a.product]) return productTotals[b.product] - productTotals[a.product];
       if (a.product !== b.product) return a.product.localeCompare(b.product);
-      if (groupTotals[b.baseName] !== groupTotals[a.baseName]) return groupTotals[b.baseName] - groupTotals[a.baseName];
-      if (a.baseName !== b.baseName) return a.baseName.localeCompare(b.baseName);
+      if (a.color !== b.color) return a.color.localeCompare(b.color);
       return getWeight(a.size) - getWeight(b.size);
     });
-
-  }, [allOrders, reportSearch, reportDates, removedNodes]);
+  }, [factoryData, reportSearch, removedNodes]);
 
   const currentTotalUnits = consolidatedFactoryList.reduce((sum, item) => sum + item.qty, 0);
 
@@ -503,7 +492,13 @@ export default function POSDashboard() {
     try {
       const indices = rowsToProcess.map(r => r.originalRowIndex);
       await fetch("/api/scanner", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "strikethrough", rowIndices: indices }) });
-      await fetchOrders();
+      
+      // Update local state without waiting for a full re-fetch so the UI is snappy and we stay on the same screen
+      setFilteredOrders(prev => prev.filter(r => !selectedForPrint.includes(r.colB)));
+      setSelectedForPrint([]);
+      
+      // We still fetch orders in the background to sync the master list
+      fetchOrders(); 
     } catch (err) {
       alert("Error updating rows.");
       setIsLoading(false);
@@ -533,11 +528,16 @@ export default function POSDashboard() {
     }
   };
 
-  if (isLoading) return <div className="p-10 text-xl font-bold flex justify-center mt-20">Syncing with Google Sheets...</div>;
   if (error) return <div className="p-10 text-red-500 font-bold">Error: {error}</div>;
 
   return (
     <>
+      {isLoading && (
+        <div className="fixed inset-0 bg-white/80 z-[100] flex flex-col items-center justify-center backdrop-blur-sm">
+          <div className="animate-spin text-6xl mb-4">⚙️</div>
+          <div className="text-xl font-bold text-gray-800">Syncing with Google Sheets...</div>
+        </div>
+      )}
       <style dangerouslySetInnerHTML={{__html: `
         @media print { 
           @page { margin: 0; size: auto; } 
@@ -830,42 +830,46 @@ export default function POSDashboard() {
                 
                 {/* MULTI-DATE FILTER CHIPS & PICKER */}
                 <div className="flex flex-wrap items-center bg-white border border-gray-300 rounded-md p-1 shadow-sm w-full md:w-auto min-h-[40px]">
-                  <span className="text-gray-400 text-lg mx-2">📅</span>
+                  <span className="text-gray-400 text-lg mx-2">🏷️</span>
                   
-                  {reportDates.map(dateStr => (
-                    <span key={dateStr} className="flex items-center bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded mr-2 mb-1 mt-1">
-                      {new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  {activeFactoryFilters.map(filter => (
+                    <span key={filter} className="flex items-center bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded mr-2 mb-1 mt-1">
+                      {filter}
                       <button 
                         onClick={() => {
-                          setReportDates(prev => prev.filter(d => d !== dateStr));
+                          setActiveFactoryFilters(prev => prev.filter(f => f !== filter));
                           setSelectedFactoryRows([]);
                         }}
                         className="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none"
-                        title="Remove date"
+                        title="Remove filter"
                       >✕</button>
                     </span>
                   ))}
 
-                  <input 
-                    type="date" 
+                  <select 
+                    value=""
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val && !reportDates.includes(val)) {
-                        setReportDates(prev => [...prev, val].sort());
+                      if (val && !activeFactoryFilters.includes(val)) {
+                        setActiveFactoryFilters(prev => [...prev, val].sort());
                         setSelectedFactoryRows([]);
                         setRemovedNodes([]);
                       }
-                      e.target.value = ""; 
                     }}
                     className="outline-none text-sm font-semibold text-gray-700 bg-transparent cursor-pointer ml-1 mb-1 mt-1"
-                    title="Add Date Filter"
-                  />
+                    title="Add Tag Filter"
+                  >
+                    <option value="" disabled>+ Add Filter</option>
+                    {factoryData.availableFilters.filter(f => !activeFactoryFilters.includes(f)).map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
                   
-                  {reportDates.length > 0 && (
+                  {activeFactoryFilters.length > 0 && (
                     <button 
-                      onClick={() => { setReportDates([]); setSelectedFactoryRows([]); setRemovedNodes([]); }} 
+                      onClick={() => { setActiveFactoryFilters([]); setSelectedFactoryRows([]); setRemovedNodes([]); }} 
                       className="text-red-400 hover:text-red-600 text-xs font-bold px-2 ml-auto"
-                      title="Clear All Dates"
+                      title="Clear All Filters"
                     >Clear</button>
                   )}
                 </div>
@@ -1019,7 +1023,7 @@ export default function POSDashboard() {
       {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
-      <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[78mm] max-w-[78mm] overflow-hidden break-words mx-auto absolute top-0 left-0">
+      <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[78mm] max-w-[78mm] break-words mx-auto pb-4">
         
         {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
@@ -1085,9 +1089,8 @@ export default function POSDashboard() {
             <div className="flex flex-col items-center justify-center mb-2 pb-2 border-b-2 border-black">
               <h2 className="text-sm font-bold uppercase tracking-widest leading-tight text-center">Factory Report</h2>
               <p className="text-[8px] mt-1 font-bold">
-                {reportDates.length > 0 
-                  ? reportDates.map(d => new Date(d).toLocaleDateString('en-GB')).join(', ') 
-                  : new Date().toLocaleDateString('en-GB')}
+                {new Date().toLocaleDateString('en-GB')}
+                {activeFactoryFilters.length > 0 && ` | Filters: ${activeFactoryFilters.join(', ')}`}
               </p>
             </div>
             

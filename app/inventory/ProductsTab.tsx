@@ -23,6 +23,9 @@ export default function ProductsTab() {
   const [addingLocationProductId, setAddingLocationProductId] = useState('');
   const [addLocationSearch, setAddLocationSearch] = useState('');
   const [addLocationId, setAddLocationId] = useState('');
+  
+  // Quick Deduct
+  const [quickDeduct, setQuickDeduct] = useState<{ [invId: string]: string }>({});
 
   // For Aliases
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -137,6 +140,33 @@ export default function ProductsTab() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleManualDeduct = async (productId: string, locationId: string, invId: string) => {
+    const qty = parseInt(quickDeduct[invId]);
+    if (isNaN(qty) || qty <= 0) return alert("Enter a valid deduction quantity.");
+    try {
+      const res = await fetch('/api/inventory/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          locationId,
+          productId,
+          action: 'DEDUCT',
+          quantity: qty,
+          reason: 'Manual deduction from UI'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQuickDeduct(prev => ({ ...prev, [invId]: '' }));
+        fetchLocalData();
+      } else {
+        alert(data.error);
+      }
+    } catch (e) {
+      alert("An error occurred");
     }
   };
 
@@ -303,7 +333,23 @@ export default function ProductsTab() {
                       {p.inventory.map((inv: any) => (
                         <div key={inv.id} className="flex justify-between items-center bg-white p-1.5 rounded border border-blue-100 text-sm">
                           <span className="font-medium text-gray-700">{inv.location?.name}</span>
-                          <span className="font-bold text-blue-600">{inv.quantity} units</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="qty"
+                              className="w-16 border rounded p-1 text-xs"
+                              value={quickDeduct[inv.id] || ''}
+                              onChange={(e) => setQuickDeduct(prev => ({...prev, [inv.id]: e.target.value}))}
+                            />
+                            <button
+                              onClick={() => handleManualDeduct(p.id, inv.locationId, inv.id)}
+                              className="text-xs bg-red-100 text-red-600 hover:bg-red-200 px-2 py-1 rounded font-bold"
+                            >
+                              Deduct
+                            </button>
+                            <span className="font-bold text-blue-600 ml-2 w-16 text-right">{inv.quantity} units</span>
+                          </div>
                         </div>
                       ))}
                     </div>

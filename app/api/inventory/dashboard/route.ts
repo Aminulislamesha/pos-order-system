@@ -59,6 +59,22 @@ export async function GET() {
         lastUpdate: l.logs[0].createdAt
       }));
 
+    // 6. Deduction History (Last 3 days)
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    const deductionLogs = await prisma.inventoryLog.findMany({
+      where: {
+        action: 'DEDUCT',
+        createdAt: { gte: threeDaysAgo }
+      },
+      include: {
+        product: true,
+        location: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -68,7 +84,8 @@ export async function GET() {
         totalSupplyQuantity,
         totalLocations,
         lowStockItems,
-        recentlyUpdatedLocations
+        recentlyUpdatedLocations,
+        deductionLogs
       }
     });
   } catch (error: any) {

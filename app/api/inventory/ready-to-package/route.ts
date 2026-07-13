@@ -36,7 +36,9 @@ export async function GET(request: Request) {
       const cells = row.values.map((cell: any) => {
         const value = cell.formattedValue || cell.userEnteredValue?.stringValue || cell.userEnteredValue?.numberValue || "";
         const isStrikethrough = cell.effectiveFormat?.textFormat?.strikethrough || false;
-        return { value: String(value), strikethrough: isStrikethrough };
+        const bg = cell.effectiveFormat?.backgroundColor;
+        const isCyan = bg && bg.red === 0 && Math.abs((bg.green || 0) - 1) < 0.1 && Math.abs((bg.blue || 0) - 1) < 0.1;
+        return { value: String(value), strikethrough: isStrikethrough, isCyan };
       });
 
       return {
@@ -55,6 +57,7 @@ export async function GET(request: Request) {
     allOrders = allOrders.filter((o: any) => {
       if (/cancelled|cancel/i.test(o.colC)) return false;
       if (o.cells[1]?.strikethrough) return false;
+      if (o.cells.some((c: any) => c.isCyan)) return false;
       return true;
     });
 

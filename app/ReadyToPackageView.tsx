@@ -61,6 +61,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
   // Selection
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [excludedOrderIds, setExcludedOrderIds] = useState<string[]>([]);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   
   // Deduct Modal
   const [showModal, setShowModal] = useState(false);
@@ -99,13 +100,51 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) setSelectedOrders(orders.map(o => o.orderId));
     else setSelectedOrders([]);
+    setLastSelectedIndex(null);
   };
 
-  const handleSelect = (id: string, isFulfillable: boolean) => {
+  const handleSelect = (index: number, id: string, isFulfillable: boolean) => {
     if (!isFulfillable) return;
-    if (selectedOrders.includes(id)) setSelectedOrders(prev => prev.filter(x => x !== id));
-    else setSelectedOrders(prev => [...prev, id]);
+    
+    setSelectedOrders(prev => {
+      const isCurrentlySelected = prev.includes(id);
+      if (isCurrentlySelected) {
+        return prev.filter(x => x !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+    setLastSelectedIndex(index);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.shiftKey) return;
+      if (lastSelectedIndex === null) return;
+      
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); // prevent page scrolling
+        const direction = e.key === 'ArrowDown' ? 1 : -1;
+        const nextIndex = lastSelectedIndex + direction;
+        
+        if (nextIndex >= 0 && nextIndex < orders.length) {
+          const nextOrder = orders[nextIndex];
+          if (nextOrder.isFulfillable && !nextOrder.isHidden) {
+            setSelectedOrders(prev => {
+              if (!prev.includes(nextOrder.orderId)) {
+                return [...prev, nextOrder.orderId];
+              }
+              return prev;
+            });
+            setLastSelectedIndex(nextIndex);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lastSelectedIndex, orders]);
 
   const handleExclude = (id: string) => {
     setExcludedOrderIds(prev => [...prev, id]);
@@ -115,21 +154,6 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
 
   const handleUnhide = (id: string) => {
     setExcludedOrderIds(prev => prev.filter(x => x !== id));
-  };
-
-  const markAsPrinted = async () => {
-    const rowsToProcess = orders.filter(r => selectedOrders.includes(r.orderId));
-    if (rowsToProcess.length === 0) return alert("Please select at least one order to mark as printed.");
-    if (!confirm(`Mark ${rowsToProcess.length} selected orders with a strikethrough in Google Sheets?`)) return;
-    setLoading(true);
-    try {
-      const indices = rowsToProcess.map(r => r.originalRowIndex);
-      await fetch("/api/scanner", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "strikethrough", rowIndices: indices }) });
-      await fetchData();
-    } catch (err) {
-      alert("Error updating rows.");
-      setLoading(false);
-    }
   };
 
   const handleOpenDeductModal = () => {
@@ -315,9 +339,6 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
             >
               🖨️ Print Selected POS
             </button>
-            <button onClick={markAsPrinted} disabled={selectedOrders.length === 0} className="bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded shadow disabled:bg-gray-500">
-              ✏️ Mark as Printed
-            </button>
             <button onClick={handleOpenDeductModal} disabled={selectedOrders.length === 0} className="bg-green-500 hover:bg-green-400 text-white font-bold py-2 px-4 rounded shadow disabled:bg-gray-500">
               Deduct Selected
             </button>
@@ -376,7 +397,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                               type="checkbox" 
                               className={`w-5 h-5 ${o.isFulfillable && !o.isHidden ? 'cursor-pointer accent-blue-600' : 'cursor-not-allowed opacity-50'}`}
                               checked={isSelected} 
-                              onChange={() => handleSelect(o.orderId, o.isFulfillable)} 
+                              onChange={() => handleSelect(index, o.orderId, o.isFulfillable)} 
                               disabled={!o.isFulfillable || o.isHidden}
                             />
                           </td>
@@ -513,7 +534,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
 
-              <div className="p-4 border-t border-gray-200 bg-gray-100 flex justify-between items-center">
+              <div className="p-6 border-t border-gray-200 bg-gray-100 flex justify-between items-center">
                 <button 
                   onClick={() => {
                     setPrintMode('picklist');
@@ -526,7 +547,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                 <div className="flex gap-2">
                   <button onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded">Cancel</button>
                   <button onClick={handleFinalizeDeductions} disabled={processing} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold shadow">
-                    {processing ? "Processing..." : "Finalize Deductions"}
+                    {processing ? "Processing..." : "Deduction and Strikethrough"}
                   </button>
                 </div>
               </div>
@@ -539,7 +560,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
 
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) FOR READY TO PACKAGE */}
       {printMode === 'pos' && (
-        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[78mm] max-w-[78mm] overflow-hidden break-words mx-auto absolute top-0 left-0">
+        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[78mm] max-w-[78mm] break-words mx-auto pb-4">
           {orders.filter(order => selectedOrders.includes(order.orderId)).map((order, index) => {
             if (!order.cells) return null;
           const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
@@ -601,24 +622,32 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
       {printMode === 'picklist' && (
         <div className="hidden print:block bg-white text-black font-mono text-[12px] leading-tight max-w-[80mm] mx-auto absolute top-0 left-0 p-2">
           <h2 className="text-center font-bold text-lg border-b border-black pb-2 mb-2">PICK LIST</h2>
-          {deductPreview.map((item, idx) => (
-            <div key={idx} className="mb-4 border-b border-gray-400 pb-2 border-dashed">
-              <div className="font-bold text-[14px] leading-tight mb-1">{item.rawName}</div>
-              <div className="font-bold text-lg mb-1">Total: {item.totalQty} pcs</div>
-              
-              <div className="pl-2 mt-1">
-                {item.allocations.map((alloc: any, allocIdx: number) => {
-                  const loc = locations.find(l => l.id === alloc.locationId);
-                  return (
-                    <div key={allocIdx} className="flex justify-between items-center py-0.5">
-                      <span className="font-bold">Loc: {loc?.name || 'Unknown'}</span>
-                      <span className="font-bold border border-black px-1">Qty: {alloc.qty}</span>
+          {(() => {
+            const locMap = new Map<string, { rawName: string, qty: number }[]>();
+            deductPreview.forEach(item => {
+              item.allocations.forEach((alloc: any) => {
+                if (alloc.qty > 0) {
+                  if (!locMap.has(alloc.locationId)) locMap.set(alloc.locationId, []);
+                  locMap.get(alloc.locationId)!.push({ rawName: item.rawName, qty: alloc.qty });
+                }
+              });
+            });
+
+            return Array.from(locMap.entries()).map(([locId, items], idx) => {
+              const locName = locations.find(l => l.id === locId)?.name || 'Unknown Location';
+              return (
+                <div key={idx} className="mb-4 border-b border-gray-400 pb-2 border-dashed">
+                  <div className="font-bold text-[16px] leading-tight mb-2 underline">{locName}</div>
+                  {items.map((item, itemIdx) => (
+                    <div key={itemIdx} className="flex justify-between items-center py-0.5">
+                      <span className="font-bold pr-2">{item.rawName}</span>
+                      <span className="font-bold whitespace-nowrap">{item.qty} pcs</span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                  ))}
+                </div>
+              );
+            });
+          })()}
           <div className="text-center mt-4">--- END OF PICK LIST ---</div>
         </div>
       )}

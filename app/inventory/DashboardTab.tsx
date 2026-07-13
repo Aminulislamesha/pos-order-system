@@ -74,25 +74,77 @@ export default function DashboardTab() {
           )}
         </div>
 
-        {/* Recently Updated Locations */}
+        {/* Deduction History */}
         <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
           <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <span>📍</span> Recently Updated Locations
+            <span>📉</span> Recent Deductions (Last 3 Days)
           </h2>
-          {data.recentlyUpdatedLocations.length === 0 ? (
-            <p className="text-sm text-gray-500 italic">No recent activity.</p>
-          ) : (
-            <div className="space-y-2">
-              {data.recentlyUpdatedLocations.map((loc: any) => (
-                <div key={loc.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100">
-                  <p className="font-bold text-sm text-gray-900">{loc.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(loc.lastUpdate).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const logs = data.deductionLogs || [];
+            if (logs.length === 0) return <p className="text-sm text-gray-500 italic">No recent deductions.</p>;
+
+            const batches: any[] = [];
+            let currentBatch = { time: logs[0].createdAt, items: [logs[0]] };
+
+            for (let i = 1; i < logs.length; i++) {
+              const log = logs[i];
+              const diffMs = Math.abs(new Date(currentBatch.time).getTime() - new Date(log.createdAt).getTime());
+              
+              if (diffMs <= 10000) {
+                currentBatch.items.push(log);
+              } else {
+                batches.push(currentBatch);
+                currentBatch = { time: log.createdAt, items: [log] };
+              }
+            }
+            batches.push(currentBatch);
+
+            return (
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {batches.map((batch, batchIdx) => {
+                  const totalItems = batch.items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+                  
+                  // Group items inside this batch by location
+                  const byLoc = new Map<string, { locName: string, products: {name: string, qty: number}[] }>();
+                  batch.items.forEach((item: any) => {
+                    const locId = item.location?.id || 'unknown';
+                    const locName = item.location?.name || 'Unknown Location';
+                    if (!byLoc.has(locId)) byLoc.set(locId, { locName, products: [] });
+                    byLoc.get(locId)!.products.push({ name: item.product?.name, qty: item.quantity });
+                  });
+
+                  return (
+                    <details key={batchIdx} className="bg-gray-50 border border-gray-200 rounded-lg group">
+                      <summary className="p-3 font-bold text-sm text-gray-800 cursor-pointer flex justify-between items-center list-none select-none hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                            {new Date(batch.time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span>{totalItems} items deducted</span>
+                        </div>
+                        <span className="text-gray-400 group-open:rotate-90 transition-transform">▶</span>
+                      </summary>
+                      <div className="p-3 border-t border-gray-200 bg-white">
+                        {Array.from(byLoc.values()).map((locGroup, lgIdx) => (
+                          <div key={lgIdx} className="mb-3 last:mb-0">
+                            <h4 className="text-xs font-bold text-gray-600 mb-1 uppercase tracking-wider">{locGroup.locName}</h4>
+                            <div className="space-y-1 pl-2 border-l-2 border-gray-200">
+                              {locGroup.products.map((p, pIdx) => (
+                                <div key={pIdx} className="flex justify-between text-sm">
+                                  <span className="text-gray-800">{p.name}</span>
+                                  <span className="font-medium text-gray-600">{p.qty} pcs</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
