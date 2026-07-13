@@ -61,6 +61,7 @@ export default function POSDashboard() {
   // Factory Spreadsheet, Drag Selection & Hierarchy Removal State
   const [reportSearch, setReportSearch] = useState<string>(""); 
   const [activeFactoryFilters, setActiveFactoryFilters] = useState<string[]>([]);
+  const [selectedFactoryDates, setSelectedFactoryDates] = useState<string[]>([]);
   const [factoryData, setFactoryData] = useState<{availableFilters: string[], orders: any[], factoryList: any[]}>({availableFilters: [], orders: [], factoryList: []});
   const [factoryLoading, setFactoryLoading] = useState(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -94,7 +95,7 @@ export default function POSDashboard() {
   useEffect(() => {
     if (activeView === "factoryReport") {
       setFactoryLoading(true);
-      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}`)
+      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}&dates=${selectedFactoryDates.join(',')}`)
         .then(res => res.json())
         .then(json => {
           if (json.success) setFactoryData(json.data);
@@ -105,7 +106,7 @@ export default function POSDashboard() {
           setFactoryLoading(false);
         });
     }
-  }, [activeView, activeFactoryFilters]);
+  }, [activeView, activeFactoryFilters, selectedFactoryDates]);
 
   const formatGoogleDate = (serial: string | number) => {
     if (!serial) return "";
@@ -830,6 +831,46 @@ export default function POSDashboard() {
                 
                 {/* MULTI-DATE FILTER CHIPS & PICKER */}
                 <div className="flex flex-wrap items-center bg-white border border-gray-300 rounded-md p-1 shadow-sm w-full md:w-auto min-h-[40px]">
+                  <span className="text-gray-400 text-lg mx-2">📅</span>
+                  
+                  {selectedFactoryDates.map(date => (
+                    <span key={date} className="flex items-center bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded mr-2 mb-1 mt-1">
+                      {date}
+                      <button 
+                        onClick={() => {
+                          setSelectedFactoryDates(prev => prev.filter(d => d !== date));
+                          setSelectedFactoryRows([]);
+                        }}
+                        className="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none"
+                        title="Remove date"
+                      >✕</button>
+                    </span>
+                  ))}
+
+                  <input 
+                    type="date"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && !selectedFactoryDates.includes(val)) {
+                        setSelectedFactoryDates(prev => [...prev, val].sort());
+                        setSelectedFactoryRows([]);
+                        setRemovedNodes([]);
+                      }
+                    }}
+                    className="outline-none text-sm font-semibold text-gray-700 bg-transparent cursor-pointer ml-1 mb-1 mt-1"
+                    title="Add Date"
+                  />
+                  
+                  {selectedFactoryDates.length > 0 && (
+                    <button 
+                      onClick={() => { setSelectedFactoryDates([]); setSelectedFactoryRows([]); setRemovedNodes([]); }} 
+                      className="ml-auto mr-2 text-xs text-red-500 hover:text-red-700 font-bold"
+                    >Clear</button>
+                  )}
+                </div>
+
+                {/* TAG FILTER CHIPS & PICKER */}
+                <div className="flex flex-wrap items-center bg-white border border-gray-300 rounded-md p-1 shadow-sm w-full md:w-auto min-h-[40px]">
                   <span className="text-gray-400 text-lg mx-2">🏷️</span>
                   
                   {activeFactoryFilters.map(filter => (
@@ -1085,10 +1126,10 @@ export default function POSDashboard() {
 
         {/* 2. FACTORY REPORT RECEIPT UI */}
         {activeView === "factoryReport" && (
-          <div className="flex flex-col pb-2">
-            <div className="flex flex-col items-center justify-center mb-2 pb-2 border-b-2 border-black">
-              <h2 className="text-sm font-bold uppercase tracking-widest leading-tight text-center">Factory Report</h2>
-              <p className="text-[8px] mt-1 font-bold">
+          <div className="flex flex-col pb-2 px-2">
+            <div className="flex flex-col items-center justify-center mb-3 pb-2 border-b-2 border-black">
+              <h2 className="text-base font-bold uppercase tracking-widest leading-tight text-center">Factory Report</h2>
+              <p className="text-[10px] mt-1 font-bold">
                 {new Date().toLocaleDateString('en-GB')}
                 {activeFactoryFilters.length > 0 && ` | Filters: ${activeFactoryFilters.join(', ')}`}
               </p>
@@ -1117,24 +1158,24 @@ export default function POSDashboard() {
                       
                       {/* PRINT PRODUCT HEADER */}
                       {showProductHeader && (
-                        <div className="mt-2 mb-0.5 border-b border-black pb-0.5" style={{ pageBreakInside: 'avoid' }}>
-                          <span className="font-black text-[11px] uppercase tracking-wider">{item.product}</span>
+                        <div className="mt-3 mb-1 border-b border-black pb-0.5" style={{ pageBreakInside: 'avoid' }}>
+                          <span className="font-black text-[13px] uppercase tracking-wider">{item.product}</span>
                         </div>
                       )}
                       
                       {/* PRINT COLOR HEADER */}
                       {showColorHeader && item.color && (
                         <div className="mt-1 mb-0.5 ml-1" style={{ pageBreakInside: 'avoid' }}>
-                          <span className="font-bold text-[10px] italic">Color: {item.color}</span>
+                          <span className="font-bold text-[12px] italic">Color: {item.color}</span>
                         </div>
                       )}
 
                       {/* PRINT SIZES (Indented) */}
-                      <div className="flex justify-between items-start border-b border-dashed border-gray-300 py-0.5 mb-0.5 ml-3" style={{ pageBreakInside: 'avoid' }}>
+                      <div className="flex justify-between items-start border-b border-dashed border-gray-300 py-1 mb-0.5 ml-3" style={{ pageBreakInside: 'avoid' }}>
                         <div className="flex flex-col w-4/5 pr-1">
-                          <span className="font-semibold text-[10px] leading-tight">Size: {item.size}</span>
+                          <span className="font-semibold text-[12px] leading-tight">Size: {item.size}</span>
                         </div>
-                        <div className="w-1/5 text-right font-black text-[11px]">
+                        <div className="w-1/5 text-right font-black text-[13px]">
                           {item.qty}
                         </div>
                       </div>
@@ -1145,7 +1186,7 @@ export default function POSDashboard() {
               })()}
             </div>
             
-            <div className="flex justify-between font-bold text-xs border-t-2 border-black pt-1 mt-1">
+            <div className="flex justify-between font-bold text-sm border-t-2 border-black pt-2 mt-2">
               <span>Total Units:</span>
               <span>
                 {(() => {

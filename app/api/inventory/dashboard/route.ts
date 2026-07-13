@@ -65,7 +65,6 @@ export async function GET() {
 
     const deductionLogs = await prisma.inventoryLog.findMany({
       where: {
-        action: 'DEDUCT',
         createdAt: { gte: threeDaysAgo }
       },
       include: {

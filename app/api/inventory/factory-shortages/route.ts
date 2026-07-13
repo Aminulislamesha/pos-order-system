@@ -8,6 +8,23 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const filtersParam = url.searchParams.get('filters');
     const activeFilters = filtersParam ? filtersParam.split(',').filter(Boolean) : [];
+    const datesParam = url.searchParams.get('dates');
+    const activeDates = datesParam ? datesParam.split(',').filter(Boolean) : [];
+
+    // Helper for date matching
+    const getISODate = (serial: string | number) => {
+      if (!serial) return "";
+      const numericSerial = Number(serial);
+      if (isNaN(numericSerial)) {
+        const dateObj = new Date(String(serial));
+        if (isNaN(dateObj.getTime())) return "";
+        return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+      } else {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        const dateObj = new Date(excelEpoch.getTime() + Math.floor(numericSerial) * 86400000);
+        return `${dateObj.getUTCFullYear()}-${String(dateObj.getUTCMonth() + 1).padStart(2, '0')}-${String(dateObj.getUTCDate()).padStart(2, '0')}`;
+      }
+    };
 
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -109,6 +126,13 @@ export async function GET(request: Request) {
       filteredOrders = includedOrders.filter((o: any) => {
         const colC = String(o.colC).toUpperCase();
         return activeFilters.some(f => colC.includes(f.toUpperCase()));
+      });
+    }
+    
+    if (activeDates.length > 0) {
+      filteredOrders = filteredOrders.filter((o: any) => {
+        const iso = getISODate(o.rawDateScore);
+        return activeDates.includes(iso);
       });
     }
 

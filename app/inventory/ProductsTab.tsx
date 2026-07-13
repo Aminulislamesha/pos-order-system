@@ -146,6 +146,7 @@ export default function ProductsTab() {
   const handleManualDeduct = async (productId: string, locationId: string, invId: string) => {
     const qty = parseInt(quickDeduct[invId]);
     if (isNaN(qty) || qty <= 0) return alert("Enter a valid deduction quantity.");
+    if (!confirm(`Are you sure you want to manually deduct ${qty} units?`)) return;
     try {
       const res = await fetch('/api/inventory/stock', {
         method: 'POST',
@@ -338,7 +339,7 @@ export default function ProductsTab() {
                               type="number"
                               min="1"
                               placeholder="qty"
-                              className="w-16 border rounded p-1 text-xs"
+                              className="w-16 border rounded p-1 text-xs text-gray-900 bg-white"
                               value={quickDeduct[inv.id] || ''}
                               onChange={(e) => setQuickDeduct(prev => ({...prev, [inv.id]: e.target.value}))}
                             />

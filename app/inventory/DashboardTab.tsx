@@ -74,14 +74,14 @@ export default function DashboardTab() {
           )}
         </div>
 
-        {/* Deduction History */}
+        {/* Recent Activity History */}
         <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
           <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <span>📉</span> Recent Deductions (Last 3 Days)
+            <span>📊</span> Recent Activity (Last 3 Days)
           </h2>
           {(() => {
             const logs = data.deductionLogs || [];
-            if (logs.length === 0) return <p className="text-sm text-gray-500 italic">No recent deductions.</p>;
+            if (logs.length === 0) return <p className="text-sm text-gray-500 italic">No recent activity.</p>;
 
             const batches: any[] = [];
             let currentBatch = { time: logs[0].createdAt, items: [logs[0]] };
@@ -90,7 +90,7 @@ export default function DashboardTab() {
               const log = logs[i];
               const diffMs = Math.abs(new Date(currentBatch.time).getTime() - new Date(log.createdAt).getTime());
               
-              if (diffMs <= 10000) {
+              if (diffMs <= 10000 && log.action === currentBatch.items[0].action) {
                 currentBatch.items.push(log);
               } else {
                 batches.push(currentBatch);
@@ -113,14 +113,16 @@ export default function DashboardTab() {
                     byLoc.get(locId)!.products.push({ name: item.product?.name, qty: item.quantity });
                   });
 
+                  const isAdd = batch.items[0].action === 'ADD';
+                  
                   return (
                     <details key={batchIdx} className="bg-gray-50 border border-gray-200 rounded-lg group">
                       <summary className="p-3 font-bold text-sm text-gray-800 cursor-pointer flex justify-between items-center list-none select-none hover:bg-gray-100 transition-colors">
                         <div className="flex items-center gap-3">
-                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                          <span className={`${isAdd ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded text-xs`}>
                             {new Date(batch.time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
-                          <span>{totalItems} items deducted</span>
+                          <span>{totalItems} items {isAdd ? 'added' : 'deducted'}</span>
                         </div>
                         <span className="text-gray-400 group-open:rotate-90 transition-transform">▶</span>
                       </summary>
