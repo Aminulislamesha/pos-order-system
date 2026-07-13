@@ -21,7 +21,7 @@ export async function GET() {
     
     const response = await sheets.spreadsheets.get({
       spreadsheetId: '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4',
-      ranges: ['Today!A:Z'], 
+      ranges: ['Today!A:ZZ'], 
       includeGridData: true,
       fields: 'sheets.data.rowData.values(userEnteredValue)'
     });
