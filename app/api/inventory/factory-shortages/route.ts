@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         rawDateScore: row.values[0]?.userEnteredValue?.numberValue || row.values[0]?.userEnteredValue?.stringValue || cells[0]?.value || rowIndex,
         cells
       };
-    }).filter((row: any) => row && (row.colA !== "" || row.colB !== ""));
+    }).filter((row: any) => row && (row.colA !== "" || row.colB !== "")) as any[];
 
     // Filter based on inclusion/exclusion rules
     const includedOrders: any[] = [];
