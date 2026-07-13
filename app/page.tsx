@@ -184,8 +184,9 @@ export default function POSDashboard() {
         const hasRequiredCode = noteItems.includes('c') || noteItems.includes('m') || noteItems.includes('wa');
         
         const hasUrgentDispatch = /(?:vu|d|dispatch\s*)\d+/i.test(notes);
+        const isExchange = /exchange|exc/i.test(notes) || /exc/i.test(orderId);
         
-        return isNotExcluded && (hasRequiredCode || hasUrgentDispatch);
+        return isNotExcluded && (hasRequiredCode || hasUrgentDispatch || isExchange);
       }
       return false; 
     });
