@@ -449,6 +449,13 @@ export default function POSDashboard() {
       alert(`❌ ERROR: Order [${code}] not found in the system!\n\nPlease click "Force Refresh Data". If it still fails, check the Google Sheet to ensure the order wasn't deleted or altered.`);
       return; 
     } 
+
+    // 4. Alert: If the order is already marked as cyan in the Google Sheet from a previous session
+    const isAlreadyCyan = orderExists.cells.some((c: any) => c.backgroundColor === 'rgb(0, 255, 255)' || c.isCyan);
+    if (isAlreadyCyan) {
+      alert(`⚠️ ALREADY PACKAGED: Order [${code}] was already marked as packaged (cyan) in the Google Sheet.`);
+      return;
+    }
     
     // Trigger visual success flash
     setScanFlash(true);
