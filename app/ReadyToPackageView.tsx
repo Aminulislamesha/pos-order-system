@@ -620,7 +620,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
 
       {/* PICK LIST POS PRINTER UI */}
       {printMode === 'picklist' && (
-        <div className="hidden print:block bg-white text-black font-mono text-[12px] leading-tight max-w-[80mm] mx-auto absolute top-0 left-0 p-2">
+        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-tight max-w-[80mm] mx-auto absolute top-0 left-0 p-2">
           <h2 className="text-center font-bold text-lg border-b border-black pb-2 mb-2">PICK LIST</h2>
           {(() => {
             const locMap = new Map<string, { rawName: string, qty: number }[]>();
