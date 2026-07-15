@@ -64,6 +64,7 @@ export async function GET(request: Request) {
         /cancelled|cancel/i.test(colCLower) ||
         /\bhold\b/i.test(colCLower) ||
         /see message/i.test(colCLower) ||
+        /unreachable/i.test(colCLower) ||
         /see wa/i.test(colCLower) ||
         /see whatsapp/i.test(colCLower) ||
         o.cells[1]?.strikethrough ||
