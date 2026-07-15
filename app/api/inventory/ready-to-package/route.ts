@@ -55,10 +55,36 @@ export async function GET(request: Request) {
     // Filter out cancelled orders, already packed
     // Note: manually excluded orders are NOT filtered here, they are bypassed in stock allocation instead
     allOrders = allOrders.filter((o: any) => {
-      if (/cancelled|cancel/i.test(o.colC)) return false;
-      if (o.cells[1]?.strikethrough) return false;
-      if (o.cells.some((c: any) => c.isCyan)) return false;
-      return true;
+      const orderId = String(o.colB).trim();
+      const colC = String(o.colC).trim();
+      const colCLower = colC.toLowerCase();
+
+      // EXCLUSION RULES (overrides everything)
+      if (
+        /cancelled|cancel/i.test(colCLower) ||
+        /\bhold\b/i.test(colCLower) ||
+        /see message/i.test(colCLower) ||
+        /see wa/i.test(colCLower) ||
+        /see whatsapp/i.test(colCLower) ||
+        o.cells[1]?.strikethrough ||
+        o.cells.some((c: any) => c.isCyan)
+      ) {
+        return false;
+      }
+
+      // INCLUSION RULES
+      if (orderId.toUpperCase().startsWith('SC')) {
+        return true;
+      } else if (orderId.toUpperCase().startsWith('NN')) {
+        // Updated to include all the variations the user requested
+        const hasValidTag = /\b(C|M|WA|confirmed|confirm|confirm form message|confirm from wa|confirm from whatsapp|confirm from M)\b/i.test(colC);
+        const hasValidSuffix = /-exe$/i.test(orderId) || /-exchange$/i.test(orderId);
+        if (hasValidTag || hasValidSuffix) {
+          return true;
+        }
+      }
+
+      return false;
     });
 
     // Extract products per order

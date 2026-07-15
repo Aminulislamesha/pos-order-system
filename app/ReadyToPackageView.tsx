@@ -280,6 +280,8 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
         }
       }
 
+      const rowIndicesToStrikethrough: number[] = [];
+
       for (const [orderId, allocations] of byOrder.entries()) {
         const res = await fetch('/api/inventory/deduct-smart', {
           method: 'POST',
@@ -293,14 +295,20 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
           break;
         }
 
-        // Ideally, here we would also call /api/scanner to strikethrough the order in Google Sheets
+        const order = orders.find(o => o.orderId === orderId);
+        if (order && typeof order.originalRowIndex === 'number') {
+           rowIndicesToStrikethrough.push(order.originalRowIndex);
+        }
+      }
+
+      // Batch strikethrough all successfully deducted orders
+      if (rowIndicesToStrikethrough.length > 0) {
         await fetch('/api/scanner', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            code: orderId,
             action: "strikethrough",
-            status: true
+            rowIndices: rowIndicesToStrikethrough
           })
         });
       }
