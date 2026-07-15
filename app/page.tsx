@@ -1111,7 +1111,7 @@ export default function POSDashboard() {
                 <div className="flex flex-col w-2/3 pr-0">
                   <p className="text-[13px] font-bold leading-none float-left">ID: {order.colB}</p>
                   <p className="text-[11px] font-bold leading-none float-left">{customerName}</p>
-                  <p className="text-[10px] mb-1.5 mt-0.5">Order date: {formatShortDate(order.colA)}</p>
+                  <p className="text-[10px] mb-1.5 mt-0.5">Date: {formatShortDate(order.colA)}</p>
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
                 </div>
