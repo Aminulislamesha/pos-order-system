@@ -66,6 +66,7 @@ export async function GET(request: Request) {
         /see message/i.test(colCLower) ||
         /unreachable/i.test(colCLower) ||
         /see wa/i.test(colCLower) ||
+        /number off/i.test(colCLower) ||
         /see whatsapp/i.test(colCLower) ||
         o.cells[1]?.strikethrough ||
         o.cells.some((c: any) => c.isCyan)
