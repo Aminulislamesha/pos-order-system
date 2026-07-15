@@ -593,7 +593,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
                 </div>
-                <div className="w-1/3 flex justify-end">
+                <div className="w-1/3 flex justify-end border-r-1 border-black pr-3">
                   <QRCodeCanvas value={order.orderId} size={64} />
                 </div>
               </div>
