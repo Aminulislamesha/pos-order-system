@@ -560,7 +560,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
 
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) FOR READY TO PACKAGE */}
       {printMode === 'pos' && (
-        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[80mm] max-w-[80mm] break-words mx-auto pb-4">
+        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] break-words mx-auto pb-4">
           {orders.filter(order => selectedOrders.includes(order.orderId)).map((order, index) => {
             if (!order.cells) return null;
           const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
