@@ -59,7 +59,11 @@ export async function GET() {
     const sizes = await prisma.size.findMany();
 
     const flatBases = bases.flatMap(b => [b.name, ...b.aliases].map(v => ({ 
-      canonical: b.name, variant: v.toLowerCase(), updatedAt: b.updatedAt 
+      canonical: b.name, 
+      variant: v.toLowerCase(), 
+      updatedAt: b.updatedAt,
+      colorOrder: b.colorOrder,
+      sizeOrder: b.sizeOrder
     })));
     flatBases.sort((a, b) => {
       const lenDiff = b.variant.length - a.variant.length;
@@ -93,16 +97,24 @@ export async function GET() {
       let matchedColor: string | null = null;
       let matchedSize: string | null = null;
 
+      let matchedBaseObj: any = null;
+
       // Match Base
       for (const f of flatBases) {
         if (rawLower.includes(f.variant)) {
           matchedBase = f.canonical;
+          matchedBaseObj = f;
           break;
         }
       }
 
       // Match Color
       for (const f of flatColors) {
+        // If the base product has a strict color order, only match colors valid for this base product
+        if (matchedBaseObj && matchedBaseObj.colorOrder && matchedBaseObj.colorOrder.length > 0) {
+          if (!matchedBaseObj.colorOrder.includes(f.canonical)) continue;
+        }
+
         if (rawLower.includes(f.variant)) {
           matchedColor = f.canonical;
           break;
@@ -112,6 +124,11 @@ export async function GET() {
       // Match Size
       // To prevent 'L' matching inside 'Formal', we use regex for word boundaries for sizes
       for (const f of flatSizes) {
+        // If the base product has a strict size order, only match sizes valid for this base product
+        if (matchedBaseObj && matchedBaseObj.sizeOrder && matchedBaseObj.sizeOrder.length > 0) {
+          if (!matchedBaseObj.sizeOrder.includes(f.canonical)) continue;
+        }
+
         // Escape special regex characters in the variant just in case (e.g., if variant has parentheses)
         const safeVariant = f.variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         if (new RegExp(`\\b${safeVariant}\\b`, 'i').test(rawLower)) {
