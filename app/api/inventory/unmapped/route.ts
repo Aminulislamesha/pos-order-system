@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
-import { matchAliasToProduct } from '@/lib/aliasMatcher';
 
 export async function GET() {
   try {
@@ -43,50 +42,87 @@ export async function GET() {
 
     const rawNames = Array.from(uniqueRawNames);
 
-    // Fetch all known products and aliases
+    // Fetch all mappings
     const products = await prisma.product.findMany({ select: { id: true, name: true } });
-    const aliases = await prisma.productAlias.findMany({ select: { alias: true } });
+    const productAliases = await prisma.productAlias.findMany({ select: { alias: true } });
 
-    const knownNames = new Set([
+    const knownMappings = new Set([
       ...products.map((p: any) => p.name.toLowerCase()),
-      ...aliases.map((a: any) => a.alias.toLowerCase())
+      ...productAliases.map((a: any) => a.alias.toLowerCase())
     ]);
 
     const finalUnmapped: string[] = [];
 
-    // Check each raw name
+    // Fetch dictionaries
+    const bases = await prisma.baseProduct.findMany();
+    const colors = await prisma.color.findMany();
+    const sizes = await prisma.size.findMany();
+
     for (const rawName of rawNames) {
-      if (knownNames.has(rawName.toLowerCase())) {
-        continue; // Already mapped
+      if (knownMappings.has(rawName.toLowerCase())) {
+        continue;
       }
 
-      // Try auto-mapping using smart alias rules
-      const matchedProductId = matchAliasToProduct(rawName, products);
+      // Try parsing with granular alias dictionary
+      const rawLower = rawName.toLowerCase();
+      let matchedBase: string | null = null;
+      let matchedColor: string | null = null;
+      let matchedSize: string | null = null;
 
-      if (matchedProductId) {
-        // We found a smart match! Create the alias automatically
-        await prisma.productAlias.create({
-          data: {
-            alias: rawName,
-            productId: matchedProductId
-          }
-        });
-        knownNames.add(rawName.toLowerCase());
+      // Match Base
+      for (const b of bases) {
+        const variants = [b.name, ...b.aliases].map(v => v.toLowerCase());
+        if (variants.some(v => rawLower.includes(v))) {
+          matchedBase = b.name;
+          break;
+        }
+      }
+
+      // Match Color
+      for (const c of colors) {
+        const variants = [c.name, ...c.aliases].map(v => v.toLowerCase());
+        // Simple word boundary match or partial match could work, but for safety:
+        if (variants.some(v => rawLower.includes(v))) {
+          matchedColor = c.name;
+          break;
+        }
+      }
+
+      // Match Size
+      // To prevent 'L' matching inside 'Formal', we use regex for word boundaries for sizes
+      for (const s of sizes) {
+        const variants = [s.name, ...s.aliases].map(v => v.toLowerCase());
+        if (variants.some(v => new RegExp(`\\b${v}\\b`, 'i').test(rawLower))) {
+          matchedSize = s.name;
+          break;
+        }
+      }
+
+      if (matchedBase && matchedColor && matchedSize) {
+        // Construct canonical name
+        const canonicalName = `${matchedBase} - ${matchedColor} / ${matchedSize}`;
+        
+        let product = products.find(p => p.name === canonicalName);
+        if (!product) {
+          // Check if it exists with comma separator
+          const commaName = `${matchedBase} - ${matchedColor}, ${matchedSize}`;
+          product = products.find(p => p.name === commaName);
+        }
+
+        if (product) {
+          // Standard product exists! Create the alias mapping
+          await prisma.productAlias.create({
+            data: { alias: rawName, productId: product.id }
+          });
+          knownMappings.add(rawName.toLowerCase());
+        } else {
+          // Parsing successful, but canonical product doesn't exist yet!
+          // Per user request, DO NOT automatically create it. Treat as unmapped.
+          finalUnmapped.push(rawName);
+        }
       } else {
-        // No match found - auto-create as a NEW Canonical Product
-        const newProduct = await prisma.product.create({
-          data: {
-            name: rawName,
-            type: 'PRODUCT' // Default to PRODUCT, user can always change or delete later if needed
-          }
-        });
-        
-        knownNames.add(rawName.toLowerCase());
-        
-        // CRITICAL: Add the newly created product to the local `products` array.
-        // This ensures that if the loop encounters another unmapped item with the 
-        // same signature later on, `matchAliasToProduct` will find THIS new product and make it an alias!
-        products.push({ id: newProduct.id, name: newProduct.name });
+        // Parsing failed! Add to unmapped list.
+        finalUnmapped.push(rawName);
       }
     }
 

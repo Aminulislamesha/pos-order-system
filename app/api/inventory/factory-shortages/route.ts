@@ -63,6 +63,9 @@ export async function GET(request: Request) {
         colA: cells[0]?.value || "", // Date
         colB: cells[1]?.value || "", // Order ID
         colC: cells[2]?.value || "", // Status / Dispatch
+        colD: cells[3]?.value || "", // Name
+        colE: cells[4]?.value || "", // Phone
+        colF: cells[5]?.value || "", // Address
         rawDateScore: row.values[0]?.userEnteredValue?.numberValue || row.values[0]?.userEnteredValue?.stringValue || cells[0]?.value || rowIndex,
         cells
       };
@@ -82,9 +85,12 @@ export async function GET(request: Request) {
         /cancelled|cancel/i.test(colCLower) ||
         /\bhold\b/i.test(colCLower) ||
         /see message/i.test(colCLower) ||
+        /unreachable/i.test(colCLower) ||
         /see wa/i.test(colCLower) ||
+        /number off/i.test(colCLower) ||
         /see whatsapp/i.test(colCLower) ||
-        o.cells[1]?.strikethrough
+        o.cells[1]?.strikethrough ||
+        o.cells.some((c: any) => c.isCyan)
       ) {
         continue;
       }
@@ -94,7 +100,7 @@ export async function GET(request: Request) {
       if (orderId.toUpperCase().startsWith('SC')) {
         include = true;
       } else if (orderId.toUpperCase().startsWith('NN')) {
-        const hasValidTag = /\b(C|M|WA|confirmed|confirm)\b/i.test(colC);
+        const hasValidTag = /\b(C|M|WA|confirmed|confirm|confirm form message|confirm from wa|confirm from whatsapp|confirm from M)\b/i.test(colC);
         const hasValidSuffix = /-exe$/i.test(orderId) || /-exchange$/i.test(orderId);
         if (hasValidTag || hasValidSuffix) {
           include = true;
@@ -199,10 +205,15 @@ export async function GET(request: Request) {
 
     const factoryList: any[] = [];
 
+    // Track exact shortages to filter order display
+    const factoryCanonicalIds = new Set<string>();
+    const factoryUnmappedNames = new Set<string>();
+
     // For mapped products
     for (const [canonicalId, demand] of canonicalDemand.entries()) {
       const currentStock = inventoryPool.get(canonicalId) || 0;
       if (currentStock < demand) {
+        factoryCanonicalIds.add(canonicalId);
         const product = products.find((p: any) => p.id === canonicalId);
         if (product) {
           factoryList.push({
@@ -216,6 +227,7 @@ export async function GET(request: Request) {
 
     // For unmapped products
     for (const [rawNameLower, demand] of unmappedDemand.entries()) {
+      factoryUnmappedNames.add(rawNameLower);
       factoryList.push({
         name: rawNameLower, // unmapped
         requiredQty: demand,
@@ -226,11 +238,42 @@ export async function GET(request: Request) {
     // Sort factory list alphabetically
     factoryList.sort((a, b) => a.name.localeCompare(b.name));
 
+    // Filter filteredOrders to ONLY include products causing the shortage
+    const exactShortageOrders = [];
+    for (const o of filteredOrders) {
+      const shortageProducts = [];
+      for (const item of o.orderProducts) {
+        const canonical = aliasMap.get(item.rawName.toLowerCase());
+        if (canonical) {
+          if (factoryCanonicalIds.has(canonical.id)) {
+            shortageProducts.push(item);
+          }
+        } else {
+          if (factoryUnmappedNames.has(item.rawName.toLowerCase())) {
+            shortageProducts.push(item);
+          }
+        }
+      }
+      
+      if (shortageProducts.length > 0) {
+        // Deep copy the order object, replace orderProducts, and strip heavy cells array to save payload size
+        exactShortageOrders.push({
+           colA: o.colA,
+           colB: o.colB,
+           colC: o.colC,
+           colD: o.colD,
+           colE: o.colE,
+           colF: o.colF,
+           orderProducts: shortageProducts
+        });
+      }
+    }
+
     return NextResponse.json({ 
       success: true, 
       data: {
         availableFilters: Array.from(availableFilters).sort(),
-        orders: filteredOrders,
+        orders: exactShortageOrders,
         factoryList
       } 
     });

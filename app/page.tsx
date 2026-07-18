@@ -1084,6 +1084,58 @@ export default function POSDashboard() {
         </div>
       )}
 
+      {/* DETAILED ORDERS TABLE FOR FACTORY REPORT */}
+      {activeView === "factoryReport" && factoryData?.orders && factoryData.orders.length > 0 && (
+        <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg border border-gray-300 mt-8 mb-16 overflow-hidden print:hidden">
+          <div className="bg-gray-800 text-white p-4">
+            <h2 className="text-xl font-bold">Detailed Orders Breakdown</h2>
+            <p className="text-gray-400 text-sm">Showing the exact orders that contribute to the factory shortages above.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead className="bg-gray-100 border-b border-gray-300">
+                <tr>
+                  <th className="p-3 border-r border-gray-200">Date</th>
+                  <th className="p-3 border-r border-gray-200">Order ID</th>
+                  <th className="p-3 border-r border-gray-200">Note</th>
+                  <th className="p-3 border-r border-gray-200">Name</th>
+                  <th className="p-3 border-r border-gray-200">Phone</th>
+                  <th className="p-3 border-r border-gray-200 min-w-[150px]">Address</th>
+                  <th className="p-3 border-r border-gray-200">Product(s)</th>
+                  <th className="p-3 text-center">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {factoryData.orders.map((order: any, idx: number) => (
+                  <tr key={idx} className="border-b border-gray-300 hover:bg-blue-100 transition-colors">
+                    <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-semibold text-base">{order.colA}</td>
+                    <td className="p-3 border-r border-gray-300 whitespace-nowrap font-bold text-blue-800 text-base">{order.colB}</td>
+                    <td className="p-3 border-r border-gray-300 text-sm text-red-700 font-bold">{order.colC}</td>
+                    <td className="p-3 border-r border-gray-300 text-gray-900 font-bold text-base">{order.colD}</td>
+                    <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-bold text-base">{order.colE}</td>
+                    <td className="p-3 border-r border-gray-300 text-sm text-gray-900 font-medium leading-tight">{order.colF}</td>
+                    <td className="p-0 border-r border-gray-300 align-top">
+                      {order.orderProducts.map((p: any, i: number) => (
+                        <div key={i} className={`p-2 px-3 text-gray-900 font-bold text-base ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                          {p.rawName}
+                        </div>
+                      ))}
+                    </td>
+                    <td className="p-0 align-top text-center font-bold text-gray-900 text-base">
+                      {order.orderProducts.map((p: any, i: number) => (
+                        <div key={i} className={`p-2 px-3 ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                          {p.qty}
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
@@ -1115,7 +1167,7 @@ export default function POSDashboard() {
                   <p className="font-bold leading-tight">{phone}</p>
                   <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
                 </div>
-                <div className="w-1/3 flex justify-end pr-3">
+                <div className="w-1/3 flex justify-end pr-2">
                   <QRCodeCanvas value={order.colB} size={64} />
                 </div>
               </div>

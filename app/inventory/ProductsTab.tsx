@@ -6,8 +6,6 @@ export default function ProductsTab() {
   const [products, setProducts] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [unmapped, setUnmapped] = useState<string[]>([]);
-  const [newProductName, setNewProductName] = useState('');
-  const [newProductType, setNewProductType] = useState('PRODUCT');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [unmappedLoading, setUnmappedLoading] = useState(false);
@@ -69,23 +67,28 @@ export default function ProductsTab() {
     setUnmappedLoading(false);
   };
 
-  const handleCreateProduct = async () => {
-    if (!newProductName) return;
+  const handleFactoryReset = async () => {
+    const confirmation = prompt("WARNING: This will permanently delete ALL locations, products, stock, and history! Type 'FACTORY RESET' to confirm.");
+    if (confirmation !== 'FACTORY RESET') {
+      if (confirmation) alert("Invalid confirmation text. Reset aborted.");
+      return;
+    }
+    
     try {
-      const res = await fetch('/api/inventory/products', {
+      const res = await fetch('/api/inventory/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProductName, type: newProductType })
+        body: JSON.stringify({ confirmText: confirmation })
       });
       const data = await res.json();
       if (data.success) {
-        setNewProductName('');
+        alert("Inventory has been reset completely.");
         fetchLocalData();
       } else {
         alert(data.error);
       }
     } catch (e) {
-      console.error(e);
+      alert("An error occurred during reset.");
     }
   };
 
@@ -239,9 +242,6 @@ export default function ProductsTab() {
 
   // Fast Search Engine implementation
   const filteredProducts = products.filter(p => {
-    // Filter by selected type (Product or Supply)
-    if (p.type !== newProductType) return false;
-
     if (!searchQuery.trim()) return true;
     const terms = searchQuery.toLowerCase().split(/\s+/);
     const searchableString = `${p.name} ${p.type} ${p.aliases.map((a:any) => a.alias).join(' ')}`.toLowerCase();
@@ -252,26 +252,20 @@ export default function ProductsTab() {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       {/* Left Column: Products */}
       <div>
-        <h2 className="text-xl font-bold mb-4">Canonical Products</h2>
-        
-        <div className="flex gap-2 mb-6">
-          <select 
-            className="border p-2 rounded text-gray-900 bg-white border-gray-300"
-            value={newProductType}
-            onChange={e => setNewProductType(e.target.value)}
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Canonical Products</h2>
+          <button 
+            onClick={handleFactoryReset} 
+            className="bg-red-600 text-white px-4 py-2 rounded font-bold hover:bg-red-700 text-sm whitespace-nowrap"
           >
-            <option value="PRODUCT">📦 Product</option>
-            <option value="SUPPLY">✂️ Supply</option>
-          </select>
-          <input 
-            type="text" 
-            placeholder="E.g., Solid Color Formal Pants - Beige / XL" 
-            className="border p-2 flex-1 rounded text-gray-900 bg-white placeholder-gray-400"
-            value={newProductName}
-            onChange={e => setNewProductName(e.target.value)}
-          />
-          <button onClick={handleCreateProduct} className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 whitespace-nowrap">Add Item</button>
+            ⚠️ Factory Reset
+          </button>
         </div>
+
+        <p className="text-sm text-gray-500 mb-6">
+          Products are now created automatically when you add stock via the <strong>Matrix Update</strong> in the Locations tab. 
+          Use this section to view existing products and manage their aliases.
+        </p>
 
         <div className="mb-4">
           <input 
