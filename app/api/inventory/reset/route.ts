@@ -15,6 +15,9 @@ export async function POST(request: Request) {
       prisma.productAlias.deleteMany({}),
       prisma.product.deleteMany({}),
       prisma.location.deleteMany({}),
+      prisma.size.deleteMany({}),
+      prisma.color.deleteMany({}),
+      prisma.baseProduct.deleteMany({}),
     ]);
 
     return NextResponse.json({ success: true, message: 'Inventory reset successfully.' });

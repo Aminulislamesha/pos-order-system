@@ -58,6 +58,30 @@ export async function GET() {
     const colors = await prisma.color.findMany();
     const sizes = await prisma.size.findMany();
 
+    const flatBases = bases.flatMap(b => [b.name, ...b.aliases].map(v => ({ 
+      canonical: b.name, variant: v.toLowerCase(), updatedAt: b.updatedAt 
+    })));
+    flatBases.sort((a, b) => {
+      const lenDiff = b.variant.length - a.variant.length;
+      return lenDiff !== 0 ? lenDiff : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
+    const flatColors = colors.flatMap(c => [c.name, ...c.aliases].map(v => ({ 
+      canonical: c.name, variant: v.toLowerCase(), updatedAt: c.updatedAt 
+    })));
+    flatColors.sort((a, b) => {
+      const lenDiff = b.variant.length - a.variant.length;
+      return lenDiff !== 0 ? lenDiff : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
+    const flatSizes = sizes.flatMap(s => [s.name, ...s.aliases].map(v => ({ 
+      canonical: s.name, variant: v.toLowerCase(), updatedAt: s.updatedAt 
+    })));
+    flatSizes.sort((a, b) => {
+      const lenDiff = b.variant.length - a.variant.length;
+      return lenDiff !== 0 ? lenDiff : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
     for (const rawName of rawNames) {
       if (knownMappings.has(rawName.toLowerCase())) {
         continue;
@@ -70,30 +94,28 @@ export async function GET() {
       let matchedSize: string | null = null;
 
       // Match Base
-      for (const b of bases) {
-        const variants = [b.name, ...b.aliases].map(v => v.toLowerCase());
-        if (variants.some(v => rawLower.includes(v))) {
-          matchedBase = b.name;
+      for (const f of flatBases) {
+        if (rawLower.includes(f.variant)) {
+          matchedBase = f.canonical;
           break;
         }
       }
 
       // Match Color
-      for (const c of colors) {
-        const variants = [c.name, ...c.aliases].map(v => v.toLowerCase());
-        // Simple word boundary match or partial match could work, but for safety:
-        if (variants.some(v => rawLower.includes(v))) {
-          matchedColor = c.name;
+      for (const f of flatColors) {
+        if (rawLower.includes(f.variant)) {
+          matchedColor = f.canonical;
           break;
         }
       }
 
       // Match Size
       // To prevent 'L' matching inside 'Formal', we use regex for word boundaries for sizes
-      for (const s of sizes) {
-        const variants = [s.name, ...s.aliases].map(v => v.toLowerCase());
-        if (variants.some(v => new RegExp(`\\b${v}\\b`, 'i').test(rawLower))) {
-          matchedSize = s.name;
+      for (const f of flatSizes) {
+        // Escape special regex characters in the variant just in case (e.g., if variant has parentheses)
+        const safeVariant = f.variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (new RegExp(`\\b${safeVariant}\\b`, 'i').test(rawLower)) {
+          matchedSize = f.canonical;
           break;
         }
       }
