@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { type, action, name, aliases } = await request.json();
+    const { type, action, name, aliases, colorOrder, sizeOrder } = await request.json();
     
     if (!type || !name) {
       return NextResponse.json({ success: false, error: 'Missing type or name' }, { status: 400 });
@@ -52,7 +52,6 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ success: true, data: updated });
     } else if (action === 'update_order' && type === 'base') {
-      const { colorOrder, sizeOrder } = await request.json();
       const cleanName = name.trim();
       const updated = await prisma.baseProduct.upsert({
         where: { name: cleanName },
