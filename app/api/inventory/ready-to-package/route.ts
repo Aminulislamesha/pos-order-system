@@ -133,7 +133,7 @@ export async function GET(request: Request) {
             resolvedCanonicalName = aliasMap.get(rawLower).name;
           } else {
             const parsed = parseProductName(pName, flatBases, flatColors, flatSizes);
-            if (parsed.success) {
+            if (parsed.success && parsed.canonicalName) {
               resolvedCanonicalName = parsed.canonicalName;
             }
           }

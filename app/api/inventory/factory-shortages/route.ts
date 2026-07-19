@@ -195,7 +195,7 @@ export async function GET(request: Request) {
           } else {
             // 2. Try intelligent parsing
             const parsed = parseProductName(pName, flatBases, flatColors, flatSizes);
-            if (parsed.success) {
+            if (parsed.success && parsed.canonicalName) {
               resolvedCanonicalName = parsed.canonicalName;
             }
           }
