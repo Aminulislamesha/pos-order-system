@@ -18,22 +18,19 @@ export async function GET() {
 
     const sheets = google.sheets({ version: 'v4', auth });
     
-    const response = await sheets.spreadsheets.get({
+    const response = await sheets.spreadsheets.values.get({
       spreadsheetId: '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4',
-      ranges: ['Today!A:ZZ'], 
-      includeGridData: true,
-      fields: 'sheets.data.rowData.values(userEnteredValue)'
+      range: 'Today!A:ZZ', 
     });
 
-    const rows = response.data.sheets?.[0]?.data?.[0]?.rowData || [];
+    const rows = response.data.values || [];
     const uniqueRawNames = new Set<string>();
 
-    rows.forEach((row: any) => {
-      if (!row.values) return;
+    rows.forEach((row: any[]) => {
+      if (!row) return;
       // Products start at column L (index 11) and alternate with quantities
-      for (let i = 11; i < row.values.length; i += 2) {
-        const cell = row.values[i];
-        const productName = cell?.userEnteredValue?.stringValue || cell?.userEnteredValue?.numberValue;
+      for (let i = 11; i < row.length; i += 2) {
+        const productName = row[i];
         if (productName && String(productName).trim() !== "" && String(productName) !== "NaN") {
           uniqueRawNames.add(String(productName).trim());
         }

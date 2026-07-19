@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const sheets = google.sheets({ version: 'v4', auth });
     const response = await sheets.spreadsheets.get({
       spreadsheetId: '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4',
-      ranges: ['Today!A:ZZ'], 
+      ranges: ['Today!A:CZ'], 
       includeGridData: true,
       fields: 'sheets.data.rowData.values(userEnteredValue,formattedValue,effectiveFormat(backgroundColor,textFormat),note)'
     });
