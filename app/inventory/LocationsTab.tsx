@@ -350,6 +350,8 @@ export default function LocationsTab() {
 
     setIsUpdatingMatrix(true);
     try {
+      await saveOrder(matrixColors, matrixSizes);
+      
       const res = await fetch('/api/inventory/stock-matrix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -731,8 +733,7 @@ export default function LocationsTab() {
                                 const diffNum = parseInt(userDiff);
                                 const previewStock = (!isNaN(diffNum)) ? currentStock + diffNum : currentStock;
 
-                                const hasStock = currentStock > 0;
-                                const placeholderStyle = hasStock ? 'placeholder:text-blue-500 placeholder:font-bold' : 'placeholder:text-gray-300';
+                                const placeholderStyle = 'placeholder:text-gray-300 placeholder:font-normal';
 
                                 return (
                                   <td key={sz} className={`p-1.5 border-r text-center ${isPopulated ? 'bg-blue-50/50' : ''}`}>
@@ -740,7 +741,7 @@ export default function LocationsTab() {
                                       <input 
                                         type="number" 
                                         placeholder={currentStock.toString()}
-                                        className={`w-full border rounded p-2 text-center focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all font-semibold ${placeholderStyle} ${isPopulated ? 'text-blue-700 bg-white border-blue-200' : 'text-gray-900 bg-gray-50 border-gray-200'}`}
+                                        className={`w-full border rounded p-2 text-center focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all ${placeholderStyle} ${isPopulated ? 'text-blue-700 font-bold bg-white border-blue-300' : 'text-gray-900 bg-gray-50 border-gray-200'}`}
                                         value={userDiff}
                                         onChange={e => handleMatrixQtyChange(col, sz, e.target.value)}
                                       />

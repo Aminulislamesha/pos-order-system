@@ -1,14 +1,6 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from './lib/prisma';
 
-let cachedDictionaries: any = null;
-let lastCacheTime = 0;
-const CACHE_TTL = 1000 * 60; // 1 minute
-
-export async function getDictionaries() {
-  if (cachedDictionaries && (Date.now() - lastCacheTime) < CACHE_TTL) {
-    return cachedDictionaries;
-  }
-
+async function run() {
   const bases = await prisma.baseProduct.findMany();
   const colors = await prisma.color.findMany();
   const sizes = await prisma.size.findMany();
@@ -41,25 +33,12 @@ export async function getDictionaries() {
     return lenDiff !== 0 ? lenDiff : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
-  cachedDictionaries = { flatBases, flatColors, flatSizes };
-  lastCacheTime = Date.now();
-  return cachedDictionaries;
-}
-
-export function parseProductName(rawName: string, flatBases: any[], flatColors: any[], flatSizes: any[]) {
-  let rawLower = rawName.toLowerCase();
+  const rawName = "Snuggly Palazzo - Baby PInk, XXL";
+  const rawLower = rawName.toLowerCase();
   
-  // Standardize common size variations to match canonical sizes
-  rawLower = rawLower.replace(/\bxxxl\b/g, '3xl')
-                     .replace(/\bxxl\b/g, '2xl')
-                     .replace(/\blarge\b/g, 'l')
-                     .replace(/\bmedium\b/g, 'm')
-                     .replace(/\bsmall\b/g, 's')
-                     .replace(/\bkid size\b/g, 'kid');
-  
-  let matchedBase = null;
-  let matchedColor = null;
-  let matchedSize = null;
+  let matchedBase: string | null = null;
+  let matchedColor: string | null = null;
+  let matchedSize: string | null = null;
   let matchedBaseObj: any = null;
 
   for (const f of flatBases) {
@@ -91,13 +70,6 @@ export function parseProductName(rawName: string, flatBases: any[], flatColors: 
     }
   }
 
-  if (matchedBase && matchedColor && matchedSize) {
-    return {
-      success: true,
-      canonicalName: `${matchedBase} - ${matchedColor} / ${matchedSize}`,
-      commaName: `${matchedBase} - ${matchedColor}, ${matchedSize}`
-    };
-  }
-
-  return { success: false };
+  console.log({ matchedBase, matchedColor, matchedSize });
 }
+run().catch(console.error);

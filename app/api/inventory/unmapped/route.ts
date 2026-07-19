@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
+import { parseProductName } from '@/lib/productParser';
 
 export async function GET() {
   try {
@@ -89,60 +90,13 @@ export async function GET() {
       }
 
       // Try parsing with granular alias dictionary
-      const rawLower = rawName.toLowerCase();
-      let matchedBase: string | null = null;
-      let matchedColor: string | null = null;
-      let matchedSize: string | null = null;
+      const parsed = parseProductName(rawName, flatBases, flatColors, flatSizes);
 
-      let matchedBaseObj: any = null;
-
-      // Match Base
-      for (const f of flatBases) {
-        if (rawLower.includes(f.variant)) {
-          matchedBase = f.canonical;
-          matchedBaseObj = f;
-          break;
-        }
-      }
-
-      // Match Color
-      for (const f of flatColors) {
-        // If the base product has a strict color order, only match colors valid for this base product
-        if (matchedBaseObj && matchedBaseObj.colorOrder && matchedBaseObj.colorOrder.length > 0) {
-          if (!matchedBaseObj.colorOrder.includes(f.canonical)) continue;
-        }
-
-        if (rawLower.includes(f.variant)) {
-          matchedColor = f.canonical;
-          break;
-        }
-      }
-
-      // Match Size
-      // To prevent 'L' matching inside 'Formal', we use regex for word boundaries for sizes
-      for (const f of flatSizes) {
-        // If the base product has a strict size order, only match sizes valid for this base product
-        if (matchedBaseObj && matchedBaseObj.sizeOrder && matchedBaseObj.sizeOrder.length > 0) {
-          if (!matchedBaseObj.sizeOrder.includes(f.canonical)) continue;
-        }
-
-        // Escape special regex characters in the variant just in case (e.g., if variant has parentheses)
-        const safeVariant = f.variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (new RegExp(`\\b${safeVariant}\\b`, 'i').test(rawLower)) {
-          matchedSize = f.canonical;
-          break;
-        }
-      }
-
-      if (matchedBase && matchedColor && matchedSize) {
-        // Construct canonical name
-        const canonicalName = `${matchedBase} - ${matchedColor} / ${matchedSize}`;
-        
-        let product = products.find(p => p.name === canonicalName);
+      if (parsed.success) {
+        let product = products.find(p => p.name === parsed.canonicalName);
         if (!product) {
           // Check if it exists with comma separator
-          const commaName = `${matchedBase} - ${matchedColor}, ${matchedSize}`;
-          product = products.find(p => p.name === commaName);
+          product = products.find(p => p.name === parsed.commaName);
         }
 
         if (product) {
