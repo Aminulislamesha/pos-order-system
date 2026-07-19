@@ -61,6 +61,7 @@ export default function POSDashboard() {
   // Factory Spreadsheet, Drag Selection & Hierarchy Removal State
   const [reportSearch, setReportSearch] = useState<string>(""); 
   const [activeFactoryFilters, setActiveFactoryFilters] = useState<string[]>([]);
+  const [activeFactoryInclusions, setActiveFactoryInclusions] = useState<string[]>([]);
   const [selectedFactoryDates, setSelectedFactoryDates] = useState<string[]>([]);
   const [factoryData, setFactoryData] = useState<{availableFilters: string[], orders: any[], factoryList: any[]}>({availableFilters: [], orders: [], factoryList: []});
   const [factoryLoading, setFactoryLoading] = useState(false);
@@ -95,7 +96,7 @@ export default function POSDashboard() {
   useEffect(() => {
     if (activeView === "factoryReport") {
       setFactoryLoading(true);
-      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}&dates=${selectedFactoryDates.join(',')}`)
+      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}&dates=${selectedFactoryDates.join(',')}&inclusions=${activeFactoryInclusions.join(',')}`)
         .then(res => res.json())
         .then(json => {
           if (json.success) setFactoryData(json.data);
@@ -106,7 +107,7 @@ export default function POSDashboard() {
           setFactoryLoading(false);
         });
     }
-  }, [activeView, activeFactoryFilters, selectedFactoryDates]);
+  }, [activeView, activeFactoryFilters, selectedFactoryDates, activeFactoryInclusions]);
 
   const formatGoogleDate = (serial: string | number) => {
     if (!serial) return "";
@@ -925,6 +926,54 @@ export default function POSDashboard() {
                       onClick={() => { setActiveFactoryFilters([]); setSelectedFactoryRows([]); setRemovedNodes([]); }} 
                       className="text-red-400 hover:text-red-600 text-xs font-bold px-2 ml-auto"
                       title="Clear All Filters"
+                    >Clear</button>
+                  )}
+                </div>
+
+                {/* THROWAWAY INCLUSION PICKER */}
+                <div className="flex flex-wrap items-center bg-white border border-gray-300 rounded-md p-1 shadow-sm w-full md:w-auto min-h-[40px]">
+                  <span className="text-gray-400 text-lg mx-2">🗑️</span>
+                  
+                  {activeFactoryInclusions.map(inc => (
+                    <span key={inc} className="flex items-center bg-gray-200 text-gray-800 text-xs font-bold px-2 py-1 rounded mr-2 mb-1 mt-1">
+                      {inc}
+                      <button 
+                        onClick={() => {
+                          setActiveFactoryInclusions(prev => prev.filter(i => i !== inc));
+                          setSelectedFactoryRows([]);
+                        }}
+                        className="ml-1 text-gray-500 hover:text-gray-700 focus:outline-none"
+                        title="Remove inclusion"
+                      >✕</button>
+                    </span>
+                  ))}
+
+                  <select 
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && !activeFactoryInclusions.includes(val)) {
+                        setActiveFactoryInclusions(prev => [...prev, val].sort());
+                        setSelectedFactoryRows([]);
+                        setRemovedNodes([]);
+                      }
+                    }}
+                    className="outline-none text-sm font-semibold text-gray-700 bg-transparent cursor-pointer ml-1 mb-1 mt-1"
+                    title="Include Throwaways"
+                  >
+                    <option value="" disabled>+ Include Orders</option>
+                    {['Cancelled', 'Hold', 'See Message', 'Unreachable', 'See WA', 'Number Off', 'See Whatsapp', 'Strikethrough', 'Cyan']
+                      .filter(f => !activeFactoryInclusions.includes(f.toLowerCase()))
+                      .map(f => (
+                      <option key={f} value={f.toLowerCase()}>{f}</option>
+                    ))}
+                  </select>
+                  
+                  {activeFactoryInclusions.length > 0 && (
+                    <button 
+                      onClick={() => { setActiveFactoryInclusions([]); setSelectedFactoryRows([]); setRemovedNodes([]); }} 
+                      className="text-red-400 hover:text-red-600 text-xs font-bold px-2 ml-auto"
+                      title="Clear All Inclusions"
                     >Clear</button>
                   )}
                 </div>

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
+import { getDictionaries, parseProductName } from '@/lib/productParser';
 
 export async function GET(request: Request) {
   try {
@@ -10,6 +11,8 @@ export async function GET(request: Request) {
     const activeFilters = filtersParam ? filtersParam.split(',').filter(Boolean) : [];
     const datesParam = url.searchParams.get('dates');
     const activeDates = datesParam ? datesParam.split(',').filter(Boolean) : [];
+    const inclusionsParam = url.searchParams.get('inclusions');
+    const activeInclusions = inclusionsParam ? inclusionsParam.split(',').filter(Boolean).map(x => x.toLowerCase()) : [];
 
     // Helper for date matching
     const getISODate = (serial: string | number) => {
@@ -81,16 +84,26 @@ export async function GET(request: Request) {
       const colCLower = colC.toLowerCase();
 
       // EXCLUSION RULES (overrides everything)
+      const isCancelled = /cancelled|cancel/i.test(colCLower);
+      const isHold = /\bhold\b/i.test(colCLower);
+      const isSeeMessage = /see message/i.test(colCLower);
+      const isUnreachable = /unreachable/i.test(colCLower);
+      const isSeeWa = /see wa/i.test(colCLower);
+      const isNumberOff = /number off/i.test(colCLower);
+      const isSeeWhatsapp = /see whatsapp/i.test(colCLower);
+      const isStrikethrough = o.cells[1]?.strikethrough;
+      const isCyan = o.cells.some((c: any) => c.isCyan);
+
       if (
-        /cancelled|cancel/i.test(colCLower) ||
-        /\bhold\b/i.test(colCLower) ||
-        /see message/i.test(colCLower) ||
-        /unreachable/i.test(colCLower) ||
-        /see wa/i.test(colCLower) ||
-        /number off/i.test(colCLower) ||
-        /see whatsapp/i.test(colCLower) ||
-        o.cells[1]?.strikethrough ||
-        o.cells.some((c: any) => c.isCyan)
+        (isCancelled && !activeInclusions.includes('cancelled')) ||
+        (isHold && !activeInclusions.includes('hold')) ||
+        (isSeeMessage && !activeInclusions.includes('see message')) ||
+        (isUnreachable && !activeInclusions.includes('unreachable')) ||
+        (isSeeWa && !activeInclusions.includes('see wa')) ||
+        (isNumberOff && !activeInclusions.includes('number off')) ||
+        (isSeeWhatsapp && !activeInclusions.includes('see whatsapp')) ||
+        (isStrikethrough && !activeInclusions.includes('strikethrough')) ||
+        (isCyan && !activeInclusions.includes('cyan'))
       ) {
         continue;
       }
@@ -145,32 +158,9 @@ export async function GET(request: Request) {
     // Extract Demand
     const demandMap = new Map<string, number>(); // canonicalName -> required qty
 
-    filteredOrders.forEach((o: any) => {
-      const orderProducts = [];
-      for (let i = 11; i < o.cells.length; i += 2) {
-        const pName = String(o.cells[i]?.value || "").trim();
-        const pQty = parseInt(String(o.cells[i + 1]?.value || "1"), 10) || 1;
-        if (pName && pName !== "NaN") {
-          let cleanName = pName;
-          cleanName = cleanName.replace(/Solid Color Formal Pants/ig, 'Ladies Formal Pant')
-                               .replace(/Office Black/ig, 'Black')
-                               .replace(/Wide Legged Formal Pants/ig, 'Wide Leg Formal Pants');
-          cleanName = cleanName.replace(/-\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small)\s*,\s*([A-Za-z\s]+)$/i, '- $2 / $1');
-          cleanName = cleanName.replace(/\s*,\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small|Kid Size|Kid|[\d-]+\s*Years)$/i, ' / $1');
-          cleanName = cleanName.replace(/\bXXXL\b/ig, '3XL').replace(/\bXXL\b/ig, '2XL')
-                               .replace(/\bLarge\b/ig, 'L').replace(/\bMedium\b/ig, 'M').replace(/\bSmall\b/ig, 'S')
-                               .replace(/\bKid Size\b/ig, 'Kid');
-          cleanName = cleanName.replace(/\s+/g, ' ').trim();
-          
-          orderProducts.push({ rawName: cleanName, qty: pQty });
-          const current = demandMap.get(cleanName.toLowerCase()) || 0;
-          demandMap.set(cleanName.toLowerCase(), current + pQty);
-        }
-      }
-      o.orderProducts = orderProducts;
-    });
+    const { flatBases, flatColors, flatSizes } = await getDictionaries();
 
-    // Fetch Database State
+    // Fetch Database State first to build the aliasMap so we can prefer explicit mapping
     const products = await prisma.product.findMany({
       include: {
         aliases: true,
@@ -186,6 +176,36 @@ export async function GET(request: Request) {
       inventoryPool.set(p.id, total);
       aliasMap.set(p.name.toLowerCase(), p);
       p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p));
+    });
+
+    filteredOrders.forEach((o: any) => {
+      const orderProducts = [];
+      for (let i = 11; i < o.cells.length; i += 2) {
+        const pName = String(o.cells[i]?.value || "").trim();
+        const pQty = parseInt(String(o.cells[i + 1]?.value || "1"), 10) || 1;
+        
+        if (pName && pName !== "NaN") {
+          const rawLower = pName.toLowerCase();
+          
+          let resolvedCanonicalName = pName; // default to raw if we fail
+
+          // 1. Try explicit alias map
+          if (aliasMap.has(rawLower)) {
+            resolvedCanonicalName = aliasMap.get(rawLower).name;
+          } else {
+            // 2. Try intelligent parsing
+            const parsed = parseProductName(pName, flatBases, flatColors, flatSizes);
+            if (parsed.success) {
+              resolvedCanonicalName = parsed.canonicalName;
+            }
+          }
+
+          orderProducts.push({ rawName: resolvedCanonicalName, qty: pQty });
+          const current = demandMap.get(resolvedCanonicalName.toLowerCase()) || 0;
+          demandMap.set(resolvedCanonicalName.toLowerCase(), current + pQty);
+        }
+      }
+      o.orderProducts = orderProducts;
     });
 
     // Calculate Final Factory List (Shortages)

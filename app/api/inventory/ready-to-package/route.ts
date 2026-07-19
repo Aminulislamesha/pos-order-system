@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
+import { getDictionaries, parseProductName } from '@/lib/productParser';
 
 export async function GET(request: Request) {
   try {
@@ -90,24 +91,51 @@ export async function GET(request: Request) {
     });
 
     // Extract products per order
+    const demandMap = new Map<string, number>();
+
+    const { flatBases, flatColors, flatSizes } = await getDictionaries();
+
+    // Fetch products first to build the aliasMap
+    const products = await prisma.product.findMany({
+      include: {
+        aliases: true,
+        inventory: true
+      }
+    });
+
+    const inventoryPool = new Map<string, number>();
+    const aliasMap = new Map<string, any>();
+
+    products.forEach((p: any) => {
+      const total = p.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
+      inventoryPool.set(p.id, total);
+      aliasMap.set(p.name.toLowerCase(), p);
+      p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p));
+    });
+
     allOrders.forEach((o: any) => {
       const orderProducts = [];
       for (let i = 11; i < o.cells.length; i += 2) {
         const pName = String(o.cells[i]?.value || "").trim();
         const pQty = parseInt(String(o.cells[i + 1]?.value || "1"), 10) || 1;
+        
         if (pName && pName !== "NaN") {
-          let cleanName = pName;
-          cleanName = cleanName.replace(/Solid Color Formal Pants/ig, 'Ladies Formal Pant')
-                               .replace(/Office Black/ig, 'Black')
-                               .replace(/Wide Legged Formal Pants/ig, 'Wide Leg Formal Pants');
-          cleanName = cleanName.replace(/-\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small)\s*,\s*([A-Za-z\s]+)$/i, '- $2 / $1');
-          cleanName = cleanName.replace(/\s*,\s*(3XL|2XL|XXL|XL|L|M|S|Large|Medium|Small|Kid Size|Kid|[\d-]+\s*Years)$/i, ' / $1');
-          cleanName = cleanName.replace(/\bXXXL\b/ig, '3XL').replace(/\bXXL\b/ig, '2XL')
-                               .replace(/\bLarge\b/ig, 'L').replace(/\bMedium\b/ig, 'M').replace(/\bSmall\b/ig, 'S')
-                               .replace(/\bKid Size\b/ig, 'Kid');
-          cleanName = cleanName.replace(/\s+/g, ' ').trim();
+          const rawLower = pName.toLowerCase();
           
-          orderProducts.push({ rawName: cleanName, qty: pQty });
+          let resolvedCanonicalName = pName;
+
+          if (aliasMap.has(rawLower)) {
+            resolvedCanonicalName = aliasMap.get(rawLower).name;
+          } else {
+            const parsed = parseProductName(pName, flatBases, flatColors, flatSizes);
+            if (parsed.success) {
+              resolvedCanonicalName = parsed.canonicalName;
+            }
+          }
+
+          orderProducts.push({ rawName: resolvedCanonicalName, qty: pQty });
+          const current = demandMap.get(resolvedCanonicalName.toLowerCase()) || 0;
+          demandMap.set(resolvedCanonicalName.toLowerCase(), current + pQty);
         }
       }
       o.orderProducts = orderProducts;
