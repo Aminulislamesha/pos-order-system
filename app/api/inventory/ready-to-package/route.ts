@@ -8,7 +8,12 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const excludeParam = url.searchParams.get('exclude');
+    const tagsParam = url.searchParams.get('tags');
+    const datesParam = url.searchParams.get('dates');
+    
     const excludedOrderIds = excludeParam ? excludeParam.split(',').map((id: any) => id.trim()) : [];
+    const selectedTags = tagsParam ? tagsParam.split(',').map(t => t.trim().toLowerCase()) : [];
+    const selectedDates = datesParam ? datesParam.split(',').map(d => d.trim().toLowerCase()) : [];
     // 1. Fetch Google Sheets Orders (Same logic as api/orders)
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -90,6 +95,39 @@ export async function GET(request: Request) {
       return false;
     });
 
+    // Extract unique available Tags and Dates for the UI selector
+    const availableTags = new Set<string>();
+    const availableDates = new Set<string>();
+
+    allOrders.forEach(o => {
+      const colC = String(o.colC).trim();
+      const colA = String(o.colA).trim();
+      if (colC) availableTags.add(colC);
+      if (colA) availableDates.add(colA);
+    });
+
+    // Apply the user's dynamic filters
+    // If no tags and no dates are selected, the user wants NO orders to be reserved.
+    if (selectedTags.length === 0 && selectedDates.length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        data: [], 
+        availableTags: Array.from(availableTags).sort(), 
+        availableDates: Array.from(availableDates).sort() 
+      });
+    }
+
+    allOrders = allOrders.filter(o => {
+      const colCLower = String(o.colC).trim().toLowerCase();
+      const colALower = String(o.colA).trim().toLowerCase();
+      
+      const matchesTag = selectedTags.includes(colCLower);
+      const matchesDate = selectedDates.includes(colALower);
+      
+      // We only process orders that match the selected targets
+      return matchesTag || matchesDate;
+    });
+
     // Extract products per order
     const demandMap = new Map<string, number>();
 
@@ -147,28 +185,20 @@ export async function GET(request: Request) {
     });
 
     // 2. Dynamic Priority Setup and Sorting
-    const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', day: 'numeric' });
-    const today = new Date();
-    const todayNum = parseInt(formatter.format(today), 10);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowNum = parseInt(formatter.format(tomorrow), 10);
-
-    const validPriorities = [`VU${todayNum}`, `VU${tomorrowNum}`, `D${todayNum}`];
-
-    const isUrgent = (colC: string) => {
-      const val = String(colC).toUpperCase();
-      return validPriorities.some(vp => val.includes(vp));
-    };
-
     allOrders.sort((a: any, b: any) => {
-      const aUrgent = isUrgent(a.colC);
-      const bUrgent = isUrgent(b.colC);
+      const aColCLower = String(a.colC).trim().toLowerCase();
+      const aColALower = String(a.colA).trim().toLowerCase();
+      const bColCLower = String(b.colC).trim().toLowerCase();
+      const bColALower = String(b.colA).trim().toLowerCase();
+
+      const aIsTagPriority = selectedTags.includes(aColCLower);
+      const bIsTagPriority = selectedTags.includes(bColCLower);
       
-      if (aUrgent && !bUrgent) return -1;
-      if (!aUrgent && bUrgent) return 1;
+      // Group 1: Matches selected Tags. Group 2: Matches selected Dates
+      if (aIsTagPriority && !bIsTagPriority) return -1;
+      if (!aIsTagPriority && bIsTagPriority) return 1;
       
-      // If same urgency, sort chronologically by order place date (Column A)
+      // If they are in the same priority group, sort chronologically
       const aScore = Number(a.rawDateScore) || a.originalRowIndex;
       const bScore = Number(b.rawDateScore) || b.originalRowIndex;
       return aScore - bScore;
@@ -183,7 +213,9 @@ export async function GET(request: Request) {
       if (!order) continue;
       if (order.orderProducts.length === 0) continue;
 
-      const orderIsPriority = isUrgent(order.colC);
+      // Because we filtered `allOrders`, ALL remaining orders act as Priority/VIP
+      // allowing partial fulfillment and tracking shortages dynamically
+      const orderIsPriority = true;
       let orderFullyFulfillable = true;
       const orderAllocations = [];
       let mappedEverything = true;
@@ -360,7 +392,12 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, data: readyToPackage });
+    return NextResponse.json({ 
+      success: true, 
+      data: readyToPackage,
+      availableTags: Array.from(availableTags).sort(),
+      availableDates: Array.from(availableDates).sort()
+    });
 
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

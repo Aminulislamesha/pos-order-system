@@ -62,6 +62,12 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [excludedOrderIds, setExcludedOrderIds] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+  // Dynamic Filters
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
   
   // Deduct Modal
   const [showModal, setShowModal] = useState(false);
@@ -73,14 +79,18 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     fetchData();
-  }, [excludedOrderIds]);
+  }, [excludedOrderIds, selectedTags, selectedDates]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const excludeQuery = excludedOrderIds.length > 0 ? `?exclude=${excludedOrderIds.join(',')}` : '';
+      const params = new URLSearchParams();
+      if (excludedOrderIds.length > 0) params.append('exclude', excludedOrderIds.join(','));
+      if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+      if (selectedDates.length > 0) params.append('dates', selectedDates.join(','));
+      
       const [ordRes, locRes, prodRes] = await Promise.all([
-        fetch(`/api/inventory/ready-to-package${excludeQuery}`),
+        fetch(`/api/inventory/ready-to-package?${params.toString()}`),
         fetch('/api/inventory/locations'),
         fetch('/api/inventory/products')
       ]);
@@ -88,7 +98,11 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
       const locData = await locRes.json();
       const prodData = await prodRes.json();
       
-      if (ordData.success) setOrders(ordData.data);
+      if (ordData.success) {
+        setOrders(ordData.data);
+        if (ordData.availableTags) setAvailableTags(ordData.availableTags);
+        if (ordData.availableDates) setAvailableDates(ordData.availableDates);
+      }
       if (locData.success) setLocations(locData.data);
       if (prodData.success) setProducts(prodData.data);
     } catch (e) {
@@ -103,17 +117,37 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
     setLastSelectedIndex(null);
   };
 
-  const handleSelect = (index: number, id: string, isFulfillable: boolean) => {
+  const handleSelect = (e: any, index: number, id: string, isFulfillable: boolean) => {
     if (!isFulfillable) return;
     
-    setSelectedOrders(prev => {
-      const isCurrentlySelected = prev.includes(id);
-      if (isCurrentlySelected) {
-        return prev.filter(x => x !== id);
-      } else {
-        return [...prev, id];
+    const isShiftPressed = e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey);
+    
+    if (isShiftPressed && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      
+      const idsToAdd: string[] = [];
+      for (let i = start; i <= end; i++) {
+        const order = orders[i];
+        if (order && order.isFulfillable && !order.isHidden) {
+          idsToAdd.push(order.orderId);
+        }
       }
-    });
+      
+      setSelectedOrders(prev => {
+        const newSet = new Set(prev);
+        idsToAdd.forEach(x => newSet.add(x));
+        return Array.from(newSet);
+      });
+    } else {
+      setSelectedOrders(prev => {
+        if (prev.includes(id)) {
+          return prev.filter(x => x !== id);
+        } else {
+          return [...prev, id];
+        }
+      });
+    }
     setLastSelectedIndex(index);
   };
 
@@ -364,6 +398,47 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
+        {/* Dynamic Filters */}
+        <div className="bg-gray-100 p-4 border-b flex flex-col md:flex-row gap-4 print:hidden shrink-0 overflow-x-auto">
+          <div className="flex-1 bg-white p-3 rounded shadow-sm border border-gray-200">
+            <h3 className="text-sm font-bold text-gray-700 mb-2">Priority 1: Select Target Tags (Column C)</h3>
+            <div className="flex flex-wrap gap-2">
+              {availableTags.length === 0 && <span className="text-gray-400 text-xs italic">No tags found</span>}
+              {availableTags.map(tag => (
+                <label key={tag} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition ${selectedTags.includes(tag.toLowerCase()) ? 'bg-blue-100 border-blue-400 text-blue-900 font-bold' : 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-800'}`}>
+                  <input type="checkbox" className="accent-blue-600" 
+                    checked={selectedTags.includes(tag.toLowerCase())}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedTags(prev => [...prev, tag.toLowerCase()]);
+                      else setSelectedTags(prev => prev.filter(t => t !== tag.toLowerCase()));
+                    }}
+                  />
+                  <span className="text-sm">{tag}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex-1 bg-white p-3 rounded shadow-sm border border-gray-200">
+            <h3 className="text-sm font-bold text-gray-700 mb-2">Priority 2: Select Target Dates (Column A)</h3>
+            <div className="flex flex-wrap gap-2">
+              {availableDates.length === 0 && <span className="text-gray-400 text-xs italic">No dates found</span>}
+              {availableDates.map(date => (
+                <label key={date} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition ${selectedDates.includes(date.toLowerCase()) ? 'bg-green-100 border-green-400 text-green-900 font-bold' : 'bg-green-50 border-green-200 hover:bg-green-100 text-green-800'}`}>
+                  <input type="checkbox" className="accent-green-600"
+                    checked={selectedDates.includes(date.toLowerCase())}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedDates(prev => [...prev, date.toLowerCase()]);
+                      else setSelectedDates(prev => prev.filter(d => d !== date.toLowerCase()));
+                    }}
+                  />
+                  <span className="text-sm">{formatShortDate(date) || date}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
         <div className="flex-1 overflow-auto bg-gray-50 relative print:hidden">
           {loading ? (
@@ -405,7 +480,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                               type="checkbox" 
                               className={`w-5 h-5 ${o.isFulfillable && !o.isHidden ? 'cursor-pointer accent-blue-600' : 'cursor-not-allowed opacity-50'}`}
                               checked={isSelected} 
-                              onChange={() => handleSelect(index, o.orderId, o.isFulfillable)} 
+                              onChange={(e) => handleSelect(e, index, o.orderId, o.isFulfillable)} 
                               disabled={!o.isFulfillable || o.isHidden}
                             />
                           </td>
@@ -436,7 +511,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                             ) : !o.isFulfillable && o.isPriority ? (
                               <div className="flex flex-col gap-1">
                                 <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full inline-block w-fit">
-                                  VU SHORTAGE
+                                  {o.status ? `${o.status.toUpperCase()} SHORTAGE` : 'SHORTAGE'}
                                 </span>
                                 {o.items.filter((i: any) => i.shortage > 0).map((item: any, idx: number) => (
                                   <div key={idx} className="text-[10px] text-red-700 font-bold leading-tight bg-red-100 p-1 rounded">
