@@ -95,22 +95,27 @@ export async function GET(request: Request) {
 
     const { flatBases, flatColors, flatSizes } = await getDictionaries();
 
-    // Fetch products first to build the aliasMap
+    // Fetch Database State
     const products = await prisma.product.findMany({
       include: {
         aliases: true,
-        inventory: true
+        inventory: {
+          include: { location: true },
+          orderBy: { quantity: 'desc' } // Auto-routing prefers highest stock first
+        }
       }
     });
 
-    const inventoryPool = new Map<string, number>();
+    const inventoryPool = new Map<string, { total: number, locs: any[] }>();
     const aliasMap = new Map<string, any>();
 
     products.forEach((p: any) => {
-      const total = p.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
-      inventoryPool.set(p.id, total);
       aliasMap.set(p.name.toLowerCase(), p);
       p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p));
+      
+      const total = p.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
+      const locs = p.inventory.map((inv: any) => ({ ...inv })); // shallow copy so we can mutate
+      inventoryPool.set(p.id, { total, locs });
     });
 
     allOrders.forEach((o: any) => {
@@ -169,31 +174,7 @@ export async function GET(request: Request) {
       return aScore - bScore;
     });
 
-    // 3. Fetch Database State
-    const products = await prisma.product.findMany({
-      include: {
-        aliases: true,
-        inventory: {
-          include: { location: true },
-          orderBy: { quantity: 'desc' } // Auto-routing prefers highest stock first
-        }
-      }
-    });
-
-    // Build Alias Map: raw string (lowercase) -> Canonical Product
-    const aliasMap = new Map<string, any>();
-    const inventoryPool = new Map<string, { total: number, locs: any[] }>();
-    products.forEach((p: any) => {
-      aliasMap.set(p.name.toLowerCase(), p);
-      p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p));
-    });
-
-    // Build running inventory pool
-    products.forEach((p: any) => {
-      const total = p.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
-      const locs = p.inventory.map((inv: any) => ({ ...inv })); // shallow copy so we can mutate
-      inventoryPool.set(p.id, { total, locs });
-    });
+    // (Database state already fetched and processed above)
 
     // 4. Simulate Deduction per Order with Advanced VIP Reservation
     const readyToPackage = [];
