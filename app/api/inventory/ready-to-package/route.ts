@@ -18,7 +18,7 @@ const formatShortDate = (dateStr: string) => {
 };
 
 const extractTag = (colC: string) => {
-  const match = colC.trim().match(/^(VU\d*|D\d*)/i);
+  const match = colC.trim().match(/\b(VU\d*|D\d*)\b/i);
   return match ? match[1].toUpperCase() : "";
 };
 
