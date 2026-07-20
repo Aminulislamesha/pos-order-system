@@ -879,6 +879,10 @@ export default function POSDashboard() {
                         setSelectedFactoryRows([]);
                         setRemovedNodes([]);
                       }
+                      // Reset so user can open the picker and select dates freely
+                      setTimeout(() => {
+                        if (e.target) e.target.value = '';
+                      }, 0);
                     }}
                     className="outline-none text-sm font-semibold text-gray-700 bg-transparent cursor-pointer ml-1 mb-1 mt-1"
                     title="Add Date"
@@ -1167,28 +1171,28 @@ export default function POSDashboard() {
                   const getStyle = (colIndex: number) => {
                     if (!order.cells || !order.cells[colIndex]) return {};
                     const cell = order.cells[colIndex];
-                    return {
-                      backgroundColor: cell.backgroundColor !== 'transparent' ? cell.backgroundColor : 'inherit',
-                      color: cell.textColor !== 'transparent' ? cell.textColor : 'inherit',
-                      textDecoration: cell.strikethrough ? 'line-through' : 'none'
-                    };
+                    const styleObj: any = {};
+                    if (cell.backgroundColor && cell.backgroundColor !== 'transparent') styleObj.backgroundColor = cell.backgroundColor;
+                    if (cell.textColor && cell.textColor !== 'transparent') styleObj.color = cell.textColor;
+                    if (cell.strikethrough) styleObj.textDecoration = 'line-through';
+                    return styleObj;
                   };
                   return (
                     <tr key={idx} className="border-b border-gray-300 hover:bg-blue-100 transition-colors">
-                      <td className="p-3 border-r border-gray-300 whitespace-nowrap font-semibold text-base" style={getStyle(0)}>{order.colA}</td>
-                      <td className="p-3 border-r border-gray-300 whitespace-nowrap font-bold text-base" style={getStyle(1)}>{order.colB}</td>
-                      <td className="p-3 border-r border-gray-300 text-sm font-bold" style={getStyle(2)}>{order.colC}</td>
-                      <td className="p-3 border-r border-gray-300 font-bold text-base" style={getStyle(3)}>{order.colD}</td>
-                      <td className="p-3 border-r border-gray-300 whitespace-nowrap font-bold text-base" style={getStyle(4)}>{order.colE}</td>
-                      <td className="p-3 border-r border-gray-300 text-sm font-medium leading-tight" style={getStyle(5)}>{order.colF}</td>
+                      <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-semibold text-base" style={getStyle(0)}>{order.colA}</td>
+                      <td className="p-3 border-r border-gray-300 whitespace-nowrap text-blue-800 font-bold text-base" style={getStyle(1)}>{order.colB}</td>
+                      <td className="p-3 border-r border-gray-300 text-sm text-red-700 font-bold" style={getStyle(2)}>{order.colC}</td>
+                      <td className="p-3 border-r border-gray-300 text-gray-900 font-bold text-base" style={getStyle(3)}>{order.colD}</td>
+                      <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-bold text-base" style={getStyle(4)}>{order.colE}</td>
+                      <td className="p-3 border-r border-gray-300 text-sm text-gray-900 font-medium leading-tight" style={getStyle(5)}>{order.colF}</td>
                       <td className="p-0 border-r border-gray-300 align-top">
                         {order.orderProducts.map((p: any, i: number) => (
-                          <div key={i} className={`p-2 px-3 font-bold text-base h-full flex items-center ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex)}>
+                          <div key={i} className={`p-2 px-3 text-gray-900 font-bold text-base h-full flex items-center ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex)}>
                             {p.rawName}
                           </div>
                         ))}
                       </td>
-                      <td className="p-0 align-top text-center font-bold text-base">
+                      <td className="p-0 align-top text-center text-gray-900 font-bold text-base">
                         {order.orderProducts.map((p: any, i: number) => {
                           const isPartial = p.shortageQty && p.shortageQty < p.qty;
                           return (
