@@ -372,7 +372,17 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
             <h2 className="text-2xl font-bold mb-1">📦 Ready to Package (Smart View)</h2>
             <p className="text-blue-200 text-sm">Showing 100% fulfillable orders, sorted by priority and stock. {selectedOrders.length} of {orders.length} orders selected.</p>
           </div>
-          <div className="flex gap-2 mt-4 md:mt-0 flex-wrap justify-end">
+          <div className="flex gap-2 mt-4 md:mt-0 flex-wrap justify-end items-center">
+            <button 
+              onClick={fetchData} 
+              disabled={loading}
+              className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2 disabled:opacity-50"
+              title="Refresh stock and orders without losing selections"
+            >
+              <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              {loading ? 'Syncing...' : 'Sync Stock'}
+            </button>
+            <div className="w-px h-6 bg-blue-400 mx-1"></div>
             <button 
               onClick={() => {
                 setPrintMode('pos');
