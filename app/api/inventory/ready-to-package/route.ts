@@ -22,6 +22,34 @@ const extractTag = (colC: string) => {
   return match ? match[1].toUpperCase() : "";
 };
 
+const parseDateScore = (dateVal: any, fallback: number) => {
+  if (typeof dateVal === 'number') return dateVal;
+  const str = String(dateVal).trim();
+  const num = Number(str);
+  if (!isNaN(num) && num > 40000) return num;
+  
+  const parts = str.match(/(\d+)\/(\d+)\/(\d+)/);
+  if (parts) {
+    const day = parseInt(parts[1], 10);
+    const month = parseInt(parts[2], 10) - 1;
+    const year = parseInt(parts[3], 10);
+    let hours = 0;
+    let minutes = 0;
+    const timeMatch = str.match(/(\d+):(\d+)\s*(am|pm)/i);
+    if (timeMatch) {
+       hours = parseInt(timeMatch[1], 10);
+       minutes = parseInt(timeMatch[2], 10);
+       if (timeMatch[3].toLowerCase() === 'pm' && hours < 12) hours += 12;
+       if (timeMatch[3].toLowerCase() === 'am' && hours === 12) hours = 0;
+    }
+    return new Date(year, month, day, hours, minutes).getTime();
+  }
+  
+  const d = new Date(str.replace(/at\s+/i, ''));
+  if (!isNaN(d.getTime())) return d.getTime();
+  return fallback;
+};
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -224,8 +252,8 @@ export async function GET(request: Request) {
       if (!aIsTagPriority && bIsTagPriority) return 1;
       
       // If they are in the same priority group, sort chronologically
-      const aScore = Number(a.rawDateScore) || a.originalRowIndex;
-      const bScore = Number(b.rawDateScore) || b.originalRowIndex;
+      const aScore = parseDateScore(a.rawDateScore, a.originalRowIndex);
+      const bScore = parseDateScore(b.rawDateScore, b.originalRowIndex);
       return aScore - bScore;
     });
 
