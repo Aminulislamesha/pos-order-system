@@ -4,6 +4,19 @@ import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
 import { getDictionaries, parseProductName } from '@/lib/productParser';
 
+const formatShortDate = (dateStr: string) => {
+  if (!dateStr || String(dateStr).trim() === "") return "";
+  const asNumber = Number(dateStr);
+  if (!isNaN(asNumber) && asNumber > 40000) {
+     const date = new Date(Math.round((asNumber - 25569) * 86400 * 1000));
+     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  }
+  const cleanStr = String(dateStr).replace(/at\s+/i, '');
+  const parsed = new Date(cleanStr);
+  if (isNaN(parsed.getTime())) return String(dateStr);
+  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+};
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -102,8 +115,12 @@ export async function GET(request: Request) {
     allOrders.forEach(o => {
       const colC = String(o.colC).trim();
       const colA = String(o.colA).trim();
-      if (colC) availableTags.add(colC);
-      if (colA) availableDates.add(colA);
+      if (colC && /^(VU|D)/i.test(colC)) {
+        availableTags.add(colC);
+      }
+      if (colA) {
+        availableDates.add(formatShortDate(colA));
+      }
     });
 
     // Apply the user's dynamic filters
@@ -119,10 +136,10 @@ export async function GET(request: Request) {
 
     allOrders = allOrders.filter(o => {
       const colCLower = String(o.colC).trim().toLowerCase();
-      const colALower = String(o.colA).trim().toLowerCase();
+      const colAFormattedLower = formatShortDate(o.colA).toLowerCase();
       
       const matchesTag = selectedTags.includes(colCLower);
-      const matchesDate = selectedDates.includes(colALower);
+      const matchesDate = selectedDates.includes(colAFormattedLower);
       
       // We only process orders that match the selected targets
       return matchesTag || matchesDate;
@@ -187,9 +204,9 @@ export async function GET(request: Request) {
     // 2. Dynamic Priority Setup and Sorting
     allOrders.sort((a: any, b: any) => {
       const aColCLower = String(a.colC).trim().toLowerCase();
-      const aColALower = String(a.colA).trim().toLowerCase();
+      const aColALower = formatShortDate(a.colA).toLowerCase();
       const bColCLower = String(b.colC).trim().toLowerCase();
-      const bColALower = String(b.colA).trim().toLowerCase();
+      const bColALower = formatShortDate(b.colA).toLowerCase();
 
       const aIsTagPriority = selectedTags.includes(aColCLower);
       const bIsTagPriority = selectedTags.includes(bColCLower);

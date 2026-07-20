@@ -477,7 +477,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                               else setSelectedDates(prev => prev.filter(d => d !== date.toLowerCase()));
                             }}
                           />
-                          <span className="text-sm text-gray-800">{formatShortDate(date) || date}</span>
+                          <span className="text-sm text-gray-800">{date}</span>
                         </label>
                       ))}
                     </div>
