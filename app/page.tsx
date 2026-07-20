@@ -1171,11 +1171,15 @@ export default function POSDashboard() {
                       ))}
                     </td>
                     <td className="p-0 align-top text-center font-bold text-gray-900 text-base">
-                      {order.orderProducts.map((p: any, i: number) => (
-                        <div key={i} className={`p-2 px-3 ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`}>
-                          {p.qty}
-                        </div>
-                      ))}
+                      {order.orderProducts.map((p: any, i: number) => {
+                        const isPartial = p.shortageQty && p.shortageQty < p.qty;
+                        return (
+                          <div key={i} className={`p-2 px-3 ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                            <span className="text-red-600 font-black">{p.shortageQty || p.qty}</span>
+                            {isPartial && <span className="text-xs text-gray-400 ml-1 font-semibold" title={`${p.qty - p.shortageQty} units are already in stock.`}>(of {p.qty})</span>}
+                          </div>
+                        );
+                      })}
                     </td>
                   </tr>
                 ))}
