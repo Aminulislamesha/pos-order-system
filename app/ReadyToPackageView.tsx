@@ -68,6 +68,8 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [showTagMenu, setShowTagMenu] = useState(false);
+  const [showDateMenu, setShowDateMenu] = useState(false);
   
   // Deduct Modal
   const [showModal, setShowModal] = useState(false);
@@ -399,43 +401,90 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
         </div>
 
         {/* Dynamic Filters */}
-        <div className="bg-gray-100 p-4 border-b flex flex-col md:flex-row gap-4 print:hidden shrink-0 overflow-x-auto">
-          <div className="flex-1 bg-white p-3 rounded shadow-sm border border-gray-200">
-            <h3 className="text-sm font-bold text-gray-700 mb-2">Priority 1: Select Target Tags (Column C)</h3>
-            <div className="flex flex-wrap gap-2">
-              {availableTags.length === 0 && <span className="text-gray-400 text-xs italic">No tags found</span>}
-              {availableTags.map(tag => (
-                <label key={tag} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition ${selectedTags.includes(tag.toLowerCase()) ? 'bg-blue-100 border-blue-400 text-blue-900 font-bold' : 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-800'}`}>
-                  <input type="checkbox" className="accent-blue-600" 
-                    checked={selectedTags.includes(tag.toLowerCase())}
-                    onChange={(e) => {
-                      if (e.target.checked) setSelectedTags(prev => [...prev, tag.toLowerCase()]);
-                      else setSelectedTags(prev => prev.filter(t => t !== tag.toLowerCase()));
-                    }}
-                  />
-                  <span className="text-sm">{tag}</span>
-                </label>
-              ))}
+        <div className="bg-gray-100 p-4 border-b flex flex-col md:flex-row gap-8 print:hidden shrink-0 overflow-visible relative">
+          
+          {/* Tags Dropdown */}
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-bold text-gray-700">Priority 1: Tags (Column C)</h3>
+              {selectedTags.length > 0 && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{selectedTags.length} Selected</span>}
             </div>
+            
+            <button 
+              onClick={() => { setShowTagMenu(!showTagMenu); setShowDateMenu(false); }}
+              className="flex items-center justify-between min-w-[160px] gap-2 bg-white border border-gray-300 rounded px-3 py-1.5 text-gray-700 hover:bg-gray-50 shadow-sm font-medium"
+            >
+              <span>🏷️ + Add Filter</span>
+              <svg className={`w-4 h-4 transition-transform text-gray-400 ${showTagMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+
+            {showTagMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowTagMenu(false)}></div>
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-xl z-50 max-h-64 overflow-y-auto">
+                  {availableTags.length === 0 ? (
+                    <div className="p-3 text-sm text-gray-500 italic">No tags found</div>
+                  ) : (
+                    <div className="flex flex-col py-1">
+                      {availableTags.map(tag => (
+                        <label key={tag} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 cursor-pointer">
+                          <input type="checkbox" className="accent-blue-600 w-4 h-4" 
+                            checked={selectedTags.includes(tag.toLowerCase())}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedTags(prev => [...prev, tag.toLowerCase()]);
+                              else setSelectedTags(prev => prev.filter(t => t !== tag.toLowerCase()));
+                            }}
+                          />
+                          <span className="text-sm text-gray-800">{tag}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           
-          <div className="flex-1 bg-white p-3 rounded shadow-sm border border-gray-200">
-            <h3 className="text-sm font-bold text-gray-700 mb-2">Priority 2: Select Target Dates (Column A)</h3>
-            <div className="flex flex-wrap gap-2">
-              {availableDates.length === 0 && <span className="text-gray-400 text-xs italic">No dates found</span>}
-              {availableDates.map(date => (
-                <label key={date} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition ${selectedDates.includes(date.toLowerCase()) ? 'bg-green-100 border-green-400 text-green-900 font-bold' : 'bg-green-50 border-green-200 hover:bg-green-100 text-green-800'}`}>
-                  <input type="checkbox" className="accent-green-600"
-                    checked={selectedDates.includes(date.toLowerCase())}
-                    onChange={(e) => {
-                      if (e.target.checked) setSelectedDates(prev => [...prev, date.toLowerCase()]);
-                      else setSelectedDates(prev => prev.filter(d => d !== date.toLowerCase()));
-                    }}
-                  />
-                  <span className="text-sm">{formatShortDate(date) || date}</span>
-                </label>
-              ))}
+          {/* Dates Dropdown */}
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-bold text-gray-700">Priority 2: Dates (Column A)</h3>
+              {selectedDates.length > 0 && <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{selectedDates.length} Selected</span>}
             </div>
+
+            <button 
+              onClick={() => { setShowDateMenu(!showDateMenu); setShowTagMenu(false); }}
+              className="flex items-center justify-between min-w-[160px] gap-2 bg-white border border-gray-300 rounded px-3 py-1.5 text-gray-700 hover:bg-gray-50 shadow-sm font-medium"
+            >
+              <span>📅 mm/dd/yyyy</span>
+              <svg className={`w-4 h-4 transition-transform text-gray-400 ${showDateMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+
+            {showDateMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowDateMenu(false)}></div>
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-xl z-50 max-h-64 overflow-y-auto">
+                  {availableDates.length === 0 ? (
+                    <div className="p-3 text-sm text-gray-500 italic">No dates found</div>
+                  ) : (
+                    <div className="flex flex-col py-1">
+                      {availableDates.map(date => (
+                        <label key={date} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 cursor-pointer">
+                          <input type="checkbox" className="accent-green-600 w-4 h-4"
+                            checked={selectedDates.includes(date.toLowerCase())}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedDates(prev => [...prev, date.toLowerCase()]);
+                              else setSelectedDates(prev => prev.filter(d => d !== date.toLowerCase()));
+                            }}
+                          />
+                          <span className="text-sm text-gray-800">{formatShortDate(date) || date}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
