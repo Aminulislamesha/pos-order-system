@@ -18,24 +18,26 @@ export async function POST(request: Request) {
     const uniqueSizes = Array.from(new Set(updates.map((u: any) => String(u.size).trim())));
     const trimmedBaseName = baseName.trim();
 
-    // 1. Dictionary Upserts (Outside transaction)
-    await Promise.all([
-      prisma.baseProduct.upsert({
-        where: { name: trimmedBaseName },
-        update: {},
-        create: { name: trimmedBaseName, aliases: [] }
-      }),
-      ...uniqueColors.map(c => prisma.color.upsert({
-        where: { name: c },
-        update: {},
-        create: { name: c, aliases: [] }
-      })),
-      ...uniqueSizes.map(s => prisma.size.upsert({
-        where: { name: s },
-        update: {},
-        create: { name: s, aliases: [] }
-      }))
-    ]);
+    // 1. Dictionary Upserts (Optimized to reduce connection usage)
+    await prisma.baseProduct.upsert({
+      where: { name: trimmedBaseName },
+      update: {},
+      create: { name: trimmedBaseName, aliases: [] }
+    });
+
+    if (uniqueColors.length > 0) {
+      await prisma.color.createMany({
+        data: uniqueColors.map(c => ({ name: c, aliases: [] })),
+        skipDuplicates: true
+      });
+    }
+
+    if (uniqueSizes.length > 0) {
+      await prisma.size.createMany({
+        data: uniqueSizes.map(s => ({ name: s, aliases: [] })),
+        skipDuplicates: true
+      });
+    }
 
     // 2. Pre-fetch and create products (Outside transaction)
     const productNames = updates.map((u: any) => `${trimmedBaseName} - ${String(u.color).trim()} / ${String(u.size).trim()}`);
