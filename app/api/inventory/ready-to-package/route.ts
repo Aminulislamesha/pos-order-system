@@ -17,6 +17,11 @@ const formatShortDate = (dateStr: string) => {
   return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
+const extractTag = (colC: string) => {
+  const match = colC.trim().match(/^(VU\d*|D\d*)/i);
+  return match ? match[1].toUpperCase() : "";
+};
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -115,9 +120,12 @@ export async function GET(request: Request) {
     allOrders.forEach(o => {
       const colC = String(o.colC).trim();
       const colA = String(o.colA).trim();
-      if (colC && /^(VU|D)/i.test(colC)) {
-        availableTags.add(colC);
+      
+      const tag = extractTag(colC);
+      if (tag) {
+        availableTags.add(tag);
       }
+      
       if (colA) {
         availableDates.add(formatShortDate(colA));
       }
@@ -135,10 +143,10 @@ export async function GET(request: Request) {
     }
 
     allOrders = allOrders.filter(o => {
-      const colCLower = String(o.colC).trim().toLowerCase();
+      const extractedTagLower = extractTag(String(o.colC)).toLowerCase();
       const colAFormattedLower = formatShortDate(o.colA).toLowerCase();
       
-      const matchesTag = selectedTags.includes(colCLower);
+      const matchesTag = extractedTagLower !== "" && selectedTags.includes(extractedTagLower);
       const matchesDate = selectedDates.includes(colAFormattedLower);
       
       // We only process orders that match the selected targets
@@ -203,13 +211,13 @@ export async function GET(request: Request) {
 
     // 2. Dynamic Priority Setup and Sorting
     allOrders.sort((a: any, b: any) => {
-      const aColCLower = String(a.colC).trim().toLowerCase();
+      const aTagLower = extractTag(String(a.colC)).toLowerCase();
       const aColALower = formatShortDate(a.colA).toLowerCase();
-      const bColCLower = String(b.colC).trim().toLowerCase();
+      const bTagLower = extractTag(String(b.colC)).toLowerCase();
       const bColALower = formatShortDate(b.colA).toLowerCase();
 
-      const aIsTagPriority = selectedTags.includes(aColCLower);
-      const bIsTagPriority = selectedTags.includes(bColCLower);
+      const aIsTagPriority = aTagLower !== "" && selectedTags.includes(aTagLower);
+      const bIsTagPriority = bTagLower !== "" && selectedTags.includes(bTagLower);
       
       // Group 1: Matches selected Tags. Group 2: Matches selected Dates
       if (aIsTagPriority && !bIsTagPriority) return -1;
