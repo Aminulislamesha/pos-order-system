@@ -259,19 +259,44 @@ export async function GET(request: Request) {
     factoryList.sort((a, b) => a.name.localeCompare(b.name));
 
     // Filter filteredOrders to ONLY include products causing the shortage
+    // To identify exactly WHICH orders contribute to the shortage, we simulate chronological fulfillment.
+    const runningStock = new Map<string, number>();
+    for (const [id, stock] of inventoryPool.entries()) {
+      runningStock.set(id, stock);
+    }
+    
     const exactShortageOrders = [];
     for (const o of filteredOrders) {
       const shortageProducts = [];
+      
       for (const item of o.orderProducts) {
+        let isShortage = false;
+        let shortageQty = 0;
+        
         const canonical = aliasMap.get(item.rawName.toLowerCase());
         if (canonical) {
           if (factoryCanonicalIds.has(canonical.id)) {
-            shortageProducts.push(item);
+            isShortage = true;
+            const currentStock = runningStock.get(canonical.id) || 0;
+            if (currentStock >= item.qty) {
+              runningStock.set(canonical.id, currentStock - item.qty);
+              shortageQty = 0; 
+            } else if (currentStock > 0) {
+              runningStock.set(canonical.id, 0);
+              shortageQty = item.qty - currentStock; 
+            } else {
+              shortageQty = item.qty; 
+            }
           }
         } else {
           if (factoryUnmappedNames.has(item.rawName.toLowerCase())) {
-            shortageProducts.push(item);
+            isShortage = true;
+            shortageQty = item.qty;
           }
+        }
+        
+        if (isShortage && shortageQty > 0) {
+          shortageProducts.push({ ...item, shortageQty });
         }
       }
       
