@@ -4,17 +4,40 @@ import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
 import { getDictionaries, parseProductName } from '@/lib/productParser';
 
-const formatShortDate = (dateStr: string) => {
-  if (!dateStr || String(dateStr).trim() === "") return "";
-  const asNumber = Number(dateStr);
-  if (!isNaN(asNumber) && asNumber > 40000) {
-     const date = new Date(Math.round((asNumber - 25569) * 86400 * 1000));
-     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+const formatShortDate = (dateVal: any) => {
+  if (!dateVal || String(dateVal).trim() === "") return "";
+  
+  const str = String(dateVal).trim();
+  const num = Number(str);
+  let d: Date | null = null;
+  
+  if (!isNaN(num) && num > 40000) {
+     // Excel serial date to JS Date (UTC)
+     d = new Date(Math.round((num - 25569) * 86400 * 1000));
+     // Use UTC methods to prevent timezone shifting
+     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+     const day = String(d.getUTCDate()).padStart(2, '0');
+     return `${day} ${months[d.getUTCMonth()]}`;
   }
-  const cleanStr = String(dateStr).replace(/at\s+/i, '');
+  
+  // Try DD/MM/YYYY
+  const parts = str.match(/(\d+)\/(\d+)\/(\d+)/);
+  if (parts) {
+    const day = parts[1].padStart(2, '0');
+    const month = parseInt(parts[2], 10) - 1;
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${day} ${months[month]}`;
+  }
+  
+  const cleanStr = str.replace(/at\s+/i, '');
   const parsed = new Date(cleanStr);
-  if (isNaN(parsed.getTime())) return String(dateStr);
-  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  if (!isNaN(parsed.getTime())) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${day} ${months[parsed.getMonth()]}`;
+  }
+  
+  return str;
 };
 
 const extractTag = (colC: string) => {
