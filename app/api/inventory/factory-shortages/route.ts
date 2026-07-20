@@ -19,7 +19,16 @@ export async function GET(request: Request) {
       if (!serial) return "";
       const numericSerial = Number(serial);
       if (isNaN(numericSerial)) {
-        const dateObj = new Date(String(serial));
+        const str = String(serial);
+        const parts = str.match(/(\d+)\/(\d+)\/(\d+)/);
+        if (parts) {
+          const day = parts[1].padStart(2, '0');
+          const month = parts[2].padStart(2, '0');
+          const year = parts[3].length === 2 ? '20' + parts[3] : parts[3];
+          return `${year}-${month}-${day}`;
+        }
+        const cleanStr = str.replace(/at\s+/i, '');
+        const dateObj = new Date(cleanStr);
         if (isNaN(dateObj.getTime())) return "";
         return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       } else {
@@ -200,7 +209,7 @@ export async function GET(request: Request) {
             }
           }
 
-          orderProducts.push({ rawName: resolvedCanonicalName, qty: pQty });
+          orderProducts.push({ rawName: resolvedCanonicalName, qty: pQty, cellIndex: i });
           const current = demandMap.get(resolvedCanonicalName.toLowerCase()) || 0;
           demandMap.set(resolvedCanonicalName.toLowerCase(), current + pQty);
         }
@@ -301,7 +310,7 @@ export async function GET(request: Request) {
       }
       
       if (shortageProducts.length > 0) {
-        // Deep copy the order object, replace orderProducts, and strip heavy cells array to save payload size
+        // Deep copy the order object, replace orderProducts, and keep cells for formatting
         exactShortageOrders.push({
            colA: o.colA,
            colB: o.colB,
@@ -309,6 +318,7 @@ export async function GET(request: Request) {
            colD: o.colD,
            colE: o.colE,
            colF: o.colF,
+           cells: o.cells,
            orderProducts: shortageProducts
         });
       }

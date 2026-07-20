@@ -140,7 +140,16 @@ export default function POSDashboard() {
     const numericSerial = Number(serial);
     
     if (isNaN(numericSerial)) {
-      const dateObj = new Date(String(serial));
+      const str = String(serial);
+      const parts = str.match(/(\d+)\/(\d+)\/(\d+)/);
+      if (parts) {
+        const day = parts[1].padStart(2, '0');
+        const month = parts[2].padStart(2, '0');
+        const year = parts[3].length === 2 ? '20' + parts[3] : parts[3];
+        return `${year}-${month}-${day}`;
+      }
+      const cleanStr = str.replace(/at\s+/i, '');
+      const dateObj = new Date(cleanStr);
       if (isNaN(dateObj.getTime())) return "";
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -148,7 +157,6 @@ export default function POSDashboard() {
       return `${year}-${month}-${day}`;
     } else {
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-      // Math.floor forces it to drop the fraction (time of day) and look ONLY at the date
       const dateObj = new Date(excelEpoch.getTime() + Math.floor(numericSerial) * 86400000);
       const year = dateObj.getUTCFullYear();
       const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
@@ -1155,34 +1163,45 @@ export default function POSDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {factoryData.orders.map((order: any, idx: number) => (
-                  <tr key={idx} className="border-b border-gray-300 hover:bg-blue-100 transition-colors">
-                    <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-semibold text-base">{order.colA}</td>
-                    <td className="p-3 border-r border-gray-300 whitespace-nowrap font-bold text-blue-800 text-base">{order.colB}</td>
-                    <td className="p-3 border-r border-gray-300 text-sm text-red-700 font-bold">{order.colC}</td>
-                    <td className="p-3 border-r border-gray-300 text-gray-900 font-bold text-base">{order.colD}</td>
-                    <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-bold text-base">{order.colE}</td>
-                    <td className="p-3 border-r border-gray-300 text-sm text-gray-900 font-medium leading-tight">{order.colF}</td>
-                    <td className="p-0 border-r border-gray-300 align-top">
-                      {order.orderProducts.map((p: any, i: number) => (
-                        <div key={i} className={`p-2 px-3 text-gray-900 font-bold text-base ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`}>
-                          {p.rawName}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="p-0 align-top text-center font-bold text-gray-900 text-base">
-                      {order.orderProducts.map((p: any, i: number) => {
-                        const isPartial = p.shortageQty && p.shortageQty < p.qty;
-                        return (
-                          <div key={i} className={`p-2 px-3 ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`}>
-                            <span className="text-red-600 font-black">{p.shortageQty || p.qty}</span>
-                            {isPartial && <span className="text-xs text-gray-400 ml-1 font-semibold" title={`${p.qty - p.shortageQty} units are already in stock.`}>(of {p.qty})</span>}
+                {factoryData.orders.map((order: any, idx: number) => {
+                  const getStyle = (colIndex: number) => {
+                    if (!order.cells || !order.cells[colIndex]) return {};
+                    const cell = order.cells[colIndex];
+                    return {
+                      backgroundColor: cell.backgroundColor !== 'transparent' ? cell.backgroundColor : 'inherit',
+                      color: cell.textColor !== 'transparent' ? cell.textColor : 'inherit',
+                      textDecoration: cell.strikethrough ? 'line-through' : 'none'
+                    };
+                  };
+                  return (
+                    <tr key={idx} className="border-b border-gray-300 hover:bg-blue-100 transition-colors">
+                      <td className="p-3 border-r border-gray-300 whitespace-nowrap font-semibold text-base" style={getStyle(0)}>{order.colA}</td>
+                      <td className="p-3 border-r border-gray-300 whitespace-nowrap font-bold text-base" style={getStyle(1)}>{order.colB}</td>
+                      <td className="p-3 border-r border-gray-300 text-sm font-bold" style={getStyle(2)}>{order.colC}</td>
+                      <td className="p-3 border-r border-gray-300 font-bold text-base" style={getStyle(3)}>{order.colD}</td>
+                      <td className="p-3 border-r border-gray-300 whitespace-nowrap font-bold text-base" style={getStyle(4)}>{order.colE}</td>
+                      <td className="p-3 border-r border-gray-300 text-sm font-medium leading-tight" style={getStyle(5)}>{order.colF}</td>
+                      <td className="p-0 border-r border-gray-300 align-top">
+                        {order.orderProducts.map((p: any, i: number) => (
+                          <div key={i} className={`p-2 px-3 font-bold text-base h-full flex items-center ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex)}>
+                            {p.rawName}
                           </div>
-                        );
-                      })}
-                    </td>
-                  </tr>
-                ))}
+                        ))}
+                      </td>
+                      <td className="p-0 align-top text-center font-bold text-base">
+                        {order.orderProducts.map((p: any, i: number) => {
+                          const isPartial = p.shortageQty && p.shortageQty < p.qty;
+                          return (
+                            <div key={i} className={`p-2 px-3 h-full flex items-center justify-center ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex + 1)}>
+                              <span className="text-red-600 font-black bg-white/60 px-1 rounded shadow-sm">{p.shortageQty || p.qty}</span>
+                              {isPartial && <span className="text-xs text-gray-600 ml-1 font-semibold bg-white/60 px-1 rounded shadow-sm" title={`${p.qty - p.shortageQty} units are already in stock.`}>(of {p.qty})</span>}
+                            </div>
+                          );
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
