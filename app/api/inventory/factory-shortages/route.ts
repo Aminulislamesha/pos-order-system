@@ -101,7 +101,7 @@ export async function GET(request: Request) {
       const isNumberOff = /number off/i.test(colCLower);
       const isSeeWhatsapp = /see whatsapp/i.test(colCLower);
       const isStrikethrough = o.cells[1]?.strikethrough;
-      const isCyan = o.cells.some((c: any) => c.isCyan);
+      const isCyan = o.cells.slice(0, 16).some((c: any) => c.isCyan);
 
       if (
         (isCancelled && !activeInclusions.includes('cancelled')) ||

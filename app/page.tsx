@@ -530,7 +530,8 @@ export default function POSDashboard() {
   };
 
   const copyCyanRows = () => {
-    const cyanRows = allOrders.filter(row => scannedIds.includes(row.colB) || row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)'));
+    // Cyan marked rows (if scanned locally OR explicitly cyan in Google Sheets in the first 16 columns)
+    const cyanRows = allOrders.filter(row => scannedIds.includes(row.colB) || row.cells.slice(0, 16).some(c => c.backgroundColor === 'rgb(0, 255, 255)'));
     if (cyanRows.length === 0) return alert("No scanned/cyan rows to copy.");
     const textData = cyanRows.map(r => r.cells.map(c => c.value).join("\t")).join("\n");
     navigator.clipboard.writeText(textData);
@@ -609,7 +610,7 @@ export default function POSDashboard() {
                       <tr><td colSpan={30} className="p-8 text-center text-gray-500">No orders found.</td></tr>
                     ) : (
                       allOrders.map((row, index) => {
-                        const isCyan = scannedIds.includes(row.colB) || row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)');
+                        const isCyan = scannedIds.includes(row.colB) || row.cells.slice(0, 16).some(c => c.backgroundColor === 'rgb(0, 255, 255)');
                         return (
                           <tr key={index} className="hover:bg-gray-50 transition border-b">
                             {row.cells.map((cell, cellIndex) => (
