@@ -1216,7 +1216,20 @@ export default function POSDashboard() {
       {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
-      <div className="hidden print:block bg-white text-black font-mono text-[12px] leading-none max-w-[80mm] break-words mx-auto pb-4">
+        <style type="text/css" media="print">
+  {`
+    @page {
+      margin: 0; 
+      size: 80mm auto; /* Forces the browser to expect 80mm width */
+    }
+    body {
+      margin: 0;
+      -webkit-print-color-adjust: exact; /* Ensures logos and bold text print cleanly */
+    }
+  `}
+</style>
+      
+     <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none w-[78mm] mx-auto overflow-hidden">
         
         {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
