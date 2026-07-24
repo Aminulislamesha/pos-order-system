@@ -1213,25 +1213,10 @@ export default function POSDashboard() {
         </div>
       )}
 
-  {/* ========================================== */}
+      {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
-      
-      <style type="text/css" media="print">
-        {`
-          @page {
-            margin: 0; 
-            size: 80mm auto; /* Forces the browser to expect 80mm width */
-          }
-          body {
-            margin: 0;
-            -webkit-print-color-adjust: exact; /* Ensures logos and bold text print cleanly */
-          }
-        `}
-      </style>
-
-      {/* Changed width to 74mm to protect against hardware print margins */}
-      <div className="hidden print:block bg-white text-black font-mono leading-none w-[74mm] mx-auto overflow-hidden pb-4">
+      <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] break-words mx-auto pb-4">
         
         {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
@@ -1246,53 +1231,133 @@ export default function POSDashboard() {
           const products = extractProducts(order.cells);
 
           return (
-            <div key={index} className="flex flex-col py-1 border-b-2 border-dashed border-black mb-1 pb-1" style={{ pageBreakInside: 'avoid' }}>
-              <div className="flex items-center justify-center gap-2 mb-1 pb-1 border-b-2 border-black">
-                <img src="/logo2.png" alt="Nitto Notun" className="h-7 w-auto object-contain brightness-0" />
-                <h3 className="text-base font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
+            <div key={index} className="flex flex-col py-0.5 border-b-2 border-dashed border-black mb-0.5 pb-0.5" style={{ pageBreakInside: 'avoid' }}>
+              <div className="flex items-center justify-center gap-2 mb-0.5 pb-0.5 border-b-2 border-black">
+                <img src="/logo2.png" alt="Nitto Notun" className="h-6 w-auto object-contain brightness-0" />
+                <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
               </div>
-              
-              <div className="flex justify-between items-start mb-2 gap-2">
-                <div className="flex-1 flex flex-col pr-1">
-                  <p className="text-[15px] font-black leading-none mb-1">ID: {order.colB}</p>
-                  <p className="text-[13px] font-bold leading-tight">{customerName}</p>
-                  <p className="text-[11px] mb-1.5 mt-0.5">Date: {formatShortDate(order.colA)}</p>
-                  <p className="text-[13px] font-bold leading-tight">{phone}</p>
-                  <p className="text-[11px] whitespace-pre-wrap mt-1 leading-tight break-words">{address}</p>
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex flex-col w-2/3 pr-0">
+                  <p className="text-[13px] font-bold leading-none float-left">ID: {order.colB}</p>
+                  <p className="text-[11px] font-bold leading-none float-left">{customerName}</p>
+                  <p className="text-[10px] mb-1.5 mt-0.5">Date: {formatShortDate(order.colA)}</p>
+                  <p className="font-bold leading-tight">{phone}</p>
+                  <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
                 </div>
-                {/* flex-shrink-0 ensures the QR code never gets compressed or pushed out */}
-                <div className="flex-shrink-0 flex justify-end">
-                  <QRCodeCanvas value={order.colB} size={60} />
+                <div className="w-1/3 flex justify-end pr-2">
+                  <QRCodeCanvas value={order.colB} size={64} />
                 </div>
               </div>
-
-              <div className="mb-0 border-t border-dashed border-black pt-1.5 mt-1">
+              <div className="mb-0 border-t border-dashed border-black pt-1">
                 {products.length === 0 ? (
-                   <p className="text-[10px] italic">No items found</p>
+                   <p className="text-[8px] italic">No items found</p>
                 ) : (
                   products.map((item, i) => (
-                    <div key={i} className="flex justify-between text-[12px] mb-1">
-                      <span className="w-5/6 break-words leading-tight pr-1">{item.name}</span>
-                      <span className="w-1/6 text-right font-bold whitespace-nowrap">x {item.qty}</span>
+                    <div key={i} className="flex justify-between text-[10px] mb-0">
+                      <span className="w-9/10 break-words leading-3">{item.name}</span>
+                      <span className="w-1/10 text-center font-bold">x{item.qty}</span>
                     </div>
                   ))
                 )}
               </div>
-              
               {order.colC && (
-                <p className="text-[11px] font-bold mb-1 pb-0 pt-1 break-words whitespace-pre-wrap">Note: {order.colC}</p>
+                <p className="text-[9px] font-bold mb-0 pb-0 pt-0.5 break-words whitespace-pre-wrap">Note: {order.colC}</p>
               )}
-              
-              <div className="flex justify-between font-black text-base border-t border-black pt-1 mt-1">
+              <div className="flex justify-between font-bold text-sm border-t border-black pr-3">
                 <span>Total:</span>
                 <span>৳{totalAmount}</span>
               </div>
-              
-              <div className="flex flex-col items-center justify-center mt-1 mb-1 pt-1 pb-1 border-t border-dashed border-gray-400">
-                <p className="text-[10px] font-bold mt-1 text-center italic">Thanks for ordering at Nitto Notun.</p>
-                <p className="text-[9px] text-center mt-0.5">nittonotun.shop | +880 13062 86385</p>
+              <div className="flex flex-col items-center justify-center mt-0 mb-1 pt-0 pb-1 border-t border-dashed border-gray-400">
+                <p className="text-[8px] font-bold mt-1 text-center italic">Thanks for ordering at Nitto Notun.</p>
+                <p className="text-[7px] text-center mt-0.5">nittonotun.shop | +880 13062 86385</p>
               </div>
             </div>
           );
         })}
+
+
+        {/* 2. FACTORY REPORT RECEIPT UI */}
+        {activeView === "factoryReport" && (
+          <div className="flex flex-col pb-2 px-2">
+            <div className="flex flex-col items-center justify-center mb-3 pb-2 border-b-2 border-black">
+              <h2 className="text-base font-bold uppercase tracking-widest leading-tight text-center">Factory Report</h2>
+              <p className="text-[10px] mt-1 font-bold">
+                {new Date().toLocaleDateString('en-GB')}
+                {activeFactoryFilters.length > 0 && ` | Filters: ${activeFactoryFilters.join(', ')}`}
+              </p>
+            </div>
+            
+            <div className="mb-2">
+              {(() => {
+                const dataToPrint = selectedFactoryRows.length > 0 
+                  ? consolidatedFactoryList.filter((_, i) => selectedFactoryRows.includes(i))
+                  : consolidatedFactoryList;
+                
+                if(dataToPrint.length === 0) return <p className="text-[10px] text-center italic">No data selected</p>;
+
+                let currentProduct = "";
+                let currentColor = "";
+
+                return dataToPrint.map((item, i) => {
+                  const showProductHeader = item.product !== currentProduct;
+                  const showColorHeader = item.product !== currentProduct || item.color !== currentColor;
+
+                  if (showProductHeader) currentProduct = item.product;
+                  if (showColorHeader) currentColor = item.color;
+
+                  return (
+                    <React.Fragment key={i}>
+                      
+                      {/* PRINT PRODUCT HEADER */}
+                      {showProductHeader && (
+                        <div className="mt-3 mb-1 border-b border-black pb-0.5" style={{ pageBreakInside: 'avoid' }}>
+                          <span className="font-black text-[13px] uppercase tracking-wider">{item.product}</span>
+                        </div>
+                      )}
+                      
+                      {/* PRINT COLOR HEADER */}
+                      {showColorHeader && item.color && (
+                        <div className="mt-1 mb-0.5 ml-1" style={{ pageBreakInside: 'avoid' }}>
+                          <span className="font-bold text-[12px] italic">Color: {item.color}</span>
+                        </div>
+                      )}
+
+                      {/* PRINT SIZES (Indented) */}
+                      <div className="flex justify-between items-start border-b border-dashed border-gray-300 py-1 mb-0.5 ml-3" style={{ pageBreakInside: 'avoid' }}>
+                        <div className="flex flex-col w-4/5 pr-1">
+                          <span className="font-semibold text-[12px] leading-tight">Size: {item.size}</span>
+                        </div>
+                        <div className="w-1/5 text-right font-black text-[13px]">
+                          {item.qty} {item.qty > 1 ? 'pcs' : 'pc'}
+                        </div>
+                      </div>
+
+                    </React.Fragment>
+                  );
+                });
+              })()}
+            </div>
+            
+            <div className="flex justify-between font-bold text-sm border-t-2 border-black pt-2 mt-2">
+              <span>Total Units:</span>
+              <span>
+                {(() => {
+                  const dataToPrint = selectedFactoryRows.length > 0 
+                  ? consolidatedFactoryList.filter((_, i) => selectedFactoryRows.includes(i))
+                  : consolidatedFactoryList;
+                  return dataToPrint.reduce((sum, item) => sum + item.qty, 0);
+                })()}
+              </span>
+            </div>
+            <div className="mt-4 text-center text-[8px] italic">End of Report</div>
+          </div>
+        )}
       </div>
+
+      {/* Ready To Package View */}
+      {activeView === "readyToPackage" && (
+        <ReadyToPackageView onBack={() => setActiveView("main")} />
+      )}
+    </>
+  );
+}
