@@ -1216,7 +1216,7 @@ export default function POSDashboard() {
       {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) */}
       {/* ========================================== */}
-      <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] break-words mx-auto pb-4">
+      <div className="hidden print:block bg-white text-black font-mono text-[12px] leading-none max-w-[80mm] break-words mx-auto pb-4">
         
         {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
