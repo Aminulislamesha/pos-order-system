@@ -700,62 +700,72 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
       </div>
       </div>
 
-      {/* EXCLUSIVE POS PRINTER UI (80mm Receipt layout) FOR READY TO PACKAGE */}
+      {/* ========================================== */}
+      {/* EXCLUSIVE POS PRINTER UI (58mm Receipt layout) FOR READY TO PACKAGE */}
+      {/* ========================================== */}
       {printMode === 'pos' && (
-        <div className="hidden print:block bg-white text-black font-mono text-[10px] leading-none max-w-[80mm] break-words mx-auto pb-4">
+        <div className="hidden print:block bg-white text-black font-mono leading-none w-[52mm] mx-auto overflow-hidden pb-4">
           {orders.filter(order => selectedOrders.includes(order.orderId)).map((order, index) => {
             if (!order.cells) return null;
-          const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
-          const customerName = rawName.split(/\s+/).slice(0, 2).join(" ");
-          const rawPhone = order.cells[4]?.value || "";
-          const phone = cleanPhoneNumber(rawPhone);
-          const address = order.cells[5]?.value || "";
-          const totalAmount = order.cells[10]?.value || "0";
-          const products = extractProducts(order.cells);
+            const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
+            const customerName = rawName.split(/\s+/).slice(0, 2).join(" ");
+            const rawPhone = order.cells[4]?.value || "";
+            const phone = cleanPhoneNumber(rawPhone);
+            const address = order.cells[5]?.value || "";
+            const totalAmount = order.cells[10]?.value || "0";
+            const products = extractProducts(order.cells);
 
-          return (
-            <div key={index} className="flex flex-col py-0.5 border-b-2 border-dashed border-black mb-0.5 pb-0.5" style={{ pageBreakInside: 'avoid' }}>
-              <div className="flex items-center justify-center gap-2 mb-0.5 pb-0.5 border-b-2 border-black">
-                <img src="/logo2.png" alt="Nitto Notun" className="h-6 w-auto object-contain brightness-0" />
-                <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
-              </div>
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex flex-col w-2/3 pr-0">
-                  <p className="text-[13px] font-bold leading-none float-left">ID: {order.orderId}</p>
-                  <p className="text-[11px] font-bold leading-none float-left">{customerName}</p>
-                  <p className="text-[10px] mb-1.5 mt-0.5">Date: {formatShortDate(order.date)}</p>
-                  <p className="font-bold leading-tight">{phone}</p>
-                  <p className="text-[8px] whitespace-pre-wrap mt-0.5 leading-tight">{address}</p>
+            return (
+              <div key={index} className="flex flex-col py-1 border-b-2 border-dashed border-black mb-1 pb-1" style={{ pageBreakInside: 'avoid' }}>
+                <div className="flex items-center justify-center gap-1.5 mb-1 pb-1 border-b-2 border-black">
+                  <img src="/logo2.png" alt="Nitto Notun" className="h-5 w-auto object-contain brightness-0" />
+                  <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Nitto Notun</h3>
                 </div>
-                <div className="w-1/3 flex justify-end pr-2">
-                  <QRCodeCanvas value={order.orderId} size={64} />
+                
+                <div className="flex justify-between items-start mb-0 gap-1.5">
+                  <div className="flex-1 flex flex-col pr-1">
+                    <p className="text-[12px] font-black leading-none mb-1">ID: {order.orderId}</p>
+                    <p className="text-[11px] font-bold leading-tight">{customerName}</p>
+                    <p className="text-[9px] mb-1 mt-0.5">Date: {formatShortDate(order.date)}</p>
+                    <p className="text-[11px] font-bold leading-tight">{phone}</p>
+                    
+                  </div>
+                  <div className="flex-shrink-0 flex justify-end mt-1 pr-2">
+                    <QRCodeCanvas value={order.orderId} size={48} />
+                  </div>
                 </div>
-              </div>
-              <div className="mb-0 border-t border-dashed border-black pt-1">
-                {products.length === 0 ? (
-                   <p className="text-[8px] italic">No items found</p>
-                ) : (
-                  products.map((item, i) => (
-                    <div key={i} className="flex justify-between text-[10px] mb-0">
-                      <span className="w-9/10 break-words leading-3">{item.name}</span>
-                      <span className="w-1/10 text-center font-bold">x{item.qty}</span>
-                    </div>
-                  ))
+                <div>
+                  <p className="text-[9px] whitespace-pre-wrap mt-1 leading-tight break-words">{address}</p>
+                </div>
+
+                <div className="mb-0 border-t border-dashed border-black pt-1 mt-1">
+                  {products.length === 0 ? (
+                     <p className="text-[9px] italic">No items found</p>
+                  ) : (
+                    products.map((item, i) => (
+                      <div key={i} className="flex justify-between text-[10px] mb-1">
+                        <span className="w-9/10 break-words leading-tight pr-1">{item.name}</span>
+                        <span className="w-1/10 text-center font-bold whitespace-nowrap">x{item.qty}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                {order.status && (
+                  <p className="text-[9px] font-bold mb-1 pb-0 pt-1 break-words whitespace-pre-wrap">Note: {order.status}</p>
                 )}
+                
+                <div className="flex justify-between font-black text-[13px] border-t border-black pt-1 mt-1 pr-3">
+                  <span>Total:</span>
+                  <span>৳{totalAmount}</span>
+                </div>
+                
+                <div className="flex flex-col items-center justify-center mt-1 mb-1 pt-1 pb-1 border-t border-dashed border-gray-400">
+                  <p className="text-[8px] font-bold mt-1 text-center italic">Thanks for ordering at Nitto Notun.</p>
+                  <p className="text-[7px] text-center mt-0.5">nittonotun.shop | +880 13062 86385</p>
+                </div>
               </div>
-              {order.status && (
-                <p className="text-[9px] font-bold mb-0 pb-0 pt-0.5 break-words whitespace-pre-wrap">Note: {order.status}</p>
-              )}
-              <div className="flex justify-between font-bold text-sm border-t border-black pr-3">
-                <span>Total:</span>
-                <span>৳{totalAmount}</span>
-              </div>
-              <div className="flex flex-col items-center justify-center mt-0 mb-1 pt-0 pb-1 border-t border-dashed border-gray-400">
-                <p className="text-[8px] font-bold mt-1 text-center italic">Thanks for ordering at Nitto Notun.</p>
-                <p className="text-[7px] text-center mt-0.5">nittonotun.shop | +880 13062 86385</p>
-              </div>
-            </div>
-          );
+            );
           })}
         </div>
       )}
