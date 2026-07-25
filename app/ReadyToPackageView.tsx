@@ -703,6 +703,20 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
       {/* ========================================== */}
       {/* EXCLUSIVE POS PRINTER UI (58mm Receipt layout) FOR READY TO PACKAGE */}
       {/* ========================================== */}
+      
+        <style type="text/css" media="print">
+          {`
+            @page {
+              margin: 0; 
+              size: 58mm auto;
+            }
+            body {
+              margin: 0;
+              -webkit-print-color-adjust: exact;
+            }
+          `}
+        </style>
+      
       {printMode === 'pos' && (
         <div className="hidden print:block bg-white text-black font-mono leading-none w-[52mm] mx-auto overflow-hidden pb-4">
           {orders.filter(order => selectedOrders.includes(order.orderId)).map((order, index) => {
