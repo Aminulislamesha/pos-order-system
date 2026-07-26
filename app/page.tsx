@@ -1234,7 +1234,7 @@ export default function POSDashboard() {
       </style>
 
       {/* Width set to 52mm to protect against hardware print margins on a 58mm printer */}
-      <div className="hidden print:block bg-white text-black font-mono leading-none w-[52mm] mx-auto overflow-hidden pb-4">
+      <div className="hidden print:block bg-white text-black font-mono leading-none w-[54mm] mx-auto overflow-hidden pb-4">
         
         {/* 1. ORDER RECEIPTS UI */}
         {activeView === "printFilter" && filteredOrders
@@ -1264,7 +1264,7 @@ export default function POSDashboard() {
                   
                 </div>
                 <div className="flex-shrink-0 flex justify-end mt-1 pr-2">
-                  <QRCodeCanvas value={order.colB} size={48} />
+                  <QRCodeCanvas value={order.colB} size={65} />
                 </div>
               </div>
               <div>

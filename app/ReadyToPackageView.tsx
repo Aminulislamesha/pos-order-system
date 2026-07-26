@@ -718,7 +718,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
         </style>
       
       {printMode === 'pos' && (
-        <div className="hidden print:block bg-white text-black font-mono leading-none w-[52mm] mx-auto overflow-hidden pb-4">
+        <div className="hidden print:block bg-white text-black font-mono leading-none w-[54mm] mx-auto overflow-hidden pb-4">
           {orders.filter(order => selectedOrders.includes(order.orderId)).map((order, index) => {
             if (!order.cells) return null;
             const rawName = String(order.cells[3]?.value || "No Name Provided").trim();
@@ -745,7 +745,7 @@ export default function ReadyToPackageView({ onBack }: { onBack: () => void }) {
                     
                   </div>
                   <div className="flex-shrink-0 flex justify-end mt-1 pr-2">
-                    <QRCodeCanvas value={order.orderId} size={48} />
+                    <QRCodeCanvas value={order.orderId} size={65} />
                   </div>
                 </div>
                 <div>
