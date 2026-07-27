@@ -204,7 +204,7 @@ export default function POSDashboard() {
 
       if (isCyanInSheet || isLocallyScanned || isStrikethrough) return false; 
 
-      const isSC = orderId.startsWith("SC");
+      const isSC = orderId.startsWith("SC" || "OTC");
       const isNN = orderId.startsWith("NN-");
       
       if (isSC) return true; 
