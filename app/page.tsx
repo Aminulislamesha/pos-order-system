@@ -207,9 +207,11 @@ export default function POSDashboard() {
       const isSC = orderId.startsWith("SC");
       const isNN = orderId.startsWith("NN-");
       const isOTC = orderId.startsWith("OT");
+      const isOT = orderId.startsWith("ot");
       
       if (isSC) return true; 
-      if (isOTC) return true; 
+      if (isOTC) return true;
+      if (isOT) return true;
       if (isNN) {
         const isNotExcluded = !/hold|cancelled|cancel/i.test(notes);
         
