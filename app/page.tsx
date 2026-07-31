@@ -1009,7 +1009,7 @@ export default function POSDashboard() {
                       setSelectedFactoryRows([]);
                       setRemovedNodes([]); 
                     }}
-                    className="w-full p-2 outline-none text-sm font-mono h-full"
+                    className="w-full p-2 outline-none text-sm font-mono h-full text-black"
                   />
                 </div>
 

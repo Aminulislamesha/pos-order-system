@@ -445,10 +445,10 @@ export default function LocationsTab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 print:hidden">
       {/* Create Location */}
       <div className="bg-gray-50 border border-gray-200 p-6 rounded-lg h-fit">
-        <h2 className="text-xl font-bold mb-4">Add New Location</h2>
+        <h2 className="text-xl font-bold mb-4 text-gray-800">Add New Location</h2>
         
         <div className="mb-4">
-          <label className="block text-sm font-bold mb-1">Location Name</label>
+          <label className="block text-sm font-bold mb-1 text-gray-700">Location Name</label>
           <input 
             type="text" 
             placeholder="E.g., Warehouse A" 
@@ -459,7 +459,7 @@ export default function LocationsTab() {
         </div>
         
         <div className="mb-6">
-          <label className="block text-sm font-bold mb-1">Notes (Optional)</label>
+          <label className="block text-sm font-bold mb-1 text-gray-700">Notes (Optional)</label>
           <textarea 
             placeholder="Additional details..." 
             className="w-full border p-2 rounded text-gray-900 bg-white placeholder-gray-400"
@@ -479,7 +479,7 @@ export default function LocationsTab() {
       {/* List Locations */}
       <div className="md:col-span-2 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Existing Locations</h2>
+          <h2 className="text-xl font-bold text-gray-800">Existing Locations</h2>
           <button 
             onClick={handleClearAllStock}
             className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition shadow-sm"
