@@ -858,7 +858,7 @@ export default function POSDashboard() {
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row items-center gap-2">
+              <div className="flex flex-col md:flex-row flex-wrap items-center gap-2 w-full">
                 
                 {/* MULTI-DATE FILTER CHIPS & PICKER */}
                 <div className="flex flex-wrap items-center bg-white border border-gray-300 rounded-md p-1 shadow-sm w-full md:w-auto min-h-[40px]">
@@ -998,7 +998,7 @@ export default function POSDashboard() {
                   )}
                 </div>
 
-                <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-md overflow-hidden shadow-sm h-10 w-full">
+                <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-md overflow-hidden shadow-sm h-10 w-full min-w-[200px]">
                   <span className="px-3 text-gray-400">fx</span>
                   <input 
                     type="text" 
