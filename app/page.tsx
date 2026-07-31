@@ -617,7 +617,7 @@ export default function POSDashboard() {
                       <tr><td colSpan={30} className="p-8 text-center text-gray-500">No orders found.</td></tr>
                     ) : (
                       allOrders.map((row, index) => {
-                        const isCyan = scannedIds.includes(row.colB) || row.cells.slice(0, 16).some(c => c.backgroundColor === 'rgb(0, 255, 255)');
+                        const isCyan = scannedIds.includes(row.colB) || row.cells.slice(7, 13).some(c => c.backgroundColor === 'rgb(0, 255, 255)');
                         return (
                           <tr key={index} className="hover:bg-gray-50 transition border-b">
                             {row.cells.map((cell, cellIndex) => (
@@ -1176,6 +1176,40 @@ export default function POSDashboard() {
               </thead>
               <tbody>
                 {factoryData.orders.map((order: OrderRow & { orderProducts: any[] }, idx: number) => {
+                  const visibleProducts = order.orderProducts.filter(p => {
+                    let splitIndex = p.rawName.lastIndexOf(' / ');
+                    let baseName = p.rawName;
+                    if (splitIndex !== -1) {
+                      baseName = p.rawName.substring(0, splitIndex).trim();
+                    } else {
+                      const commaSplitIndex = p.rawName.lastIndexOf(',');
+                      if (commaSplitIndex !== -1) {
+                        baseName = p.rawName.substring(0, commaSplitIndex).trim();
+                      }
+                    }
+                    
+                    let product = baseName;
+                    let color = "";
+                    const colorSplitIndex = baseName.lastIndexOf(' - ');
+                    if (colorSplitIndex !== -1) {
+                       product = baseName.substring(0, colorSplitIndex).trim();
+                       color = baseName.substring(colorSplitIndex + 3).trim();
+                    }
+                    
+                    if (removedNodes.includes(`P:${product}`)) return false;
+                    if (removedNodes.includes(`C:${product}|${color}`)) return false;
+                    if (removedNodes.includes(`S:${p.rawName}`)) return false;
+                    
+                    const searchTerms = reportSearch.toLowerCase().split(" ").filter(Boolean);
+                    if (searchTerms.length > 0 && !searchTerms.every(term => p.rawName.toLowerCase().includes(term))) {
+                      return false;
+                    }
+                    
+                    return true;
+                  });
+
+                  if (visibleProducts.length === 0) return null;
+
                   const getStyle = (colIndex: number) => {
                     if (!order.cells || !order.cells[colIndex]) return {};
                     const cell = order.cells[colIndex];
@@ -1194,17 +1228,17 @@ export default function POSDashboard() {
                       <td className="p-3 border-r border-gray-300 whitespace-nowrap text-gray-900 font-bold text-base" style={getStyle(4)}>{order.colE}</td>
                       <td className="p-3 border-r border-gray-300 text-sm text-gray-900 font-medium leading-tight" style={getStyle(5)}>{order.colF}</td>
                       <td className="p-0 border-r border-gray-300 align-top">
-                        {order.orderProducts.map((p: any, i: number) => (
-                          <div key={i} className={`p-2 px-3 text-gray-900 font-bold text-base h-full flex items-center ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex)}>
+                        {visibleProducts.map((p: any, i: number) => (
+                          <div key={i} className={`p-2 px-3 text-gray-900 font-bold text-base h-full flex items-center ${i !== visibleProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex)}>
                             {p.rawName}
                           </div>
                         ))}
                       </td>
                       <td className="p-0 align-top text-center text-gray-900 font-bold text-base">
-                        {order.orderProducts.map((p: any, i: number) => {
+                        {visibleProducts.map((p: any, i: number) => {
                           const isPartial = p.shortageQty && p.shortageQty < p.qty;
                           return (
-                            <div key={i} className={`p-2 px-3 h-full flex items-center justify-center ${i !== order.orderProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex + 1)}>
+                            <div key={i} className={`p-2 px-3 h-full flex items-center justify-center ${i !== visibleProducts.length - 1 ? 'border-b border-gray-300' : ''}`} style={getStyle(p.cellIndex + 1)}>
                               <span className="text-red-600 font-black bg-white/60 px-1 rounded shadow-sm">{p.shortageQty || p.qty}</span>
                               {isPartial && <span className="text-xs text-gray-600 ml-1 font-semibold bg-white/60 px-1 rounded shadow-sm" title={`${p.qty - p.shortageQty} units are already in stock.`}>(of {p.qty})</span>}
                             </div>
