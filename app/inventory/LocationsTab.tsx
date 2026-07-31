@@ -170,6 +170,33 @@ export default function LocationsTab() {
     }
   };
 
+  const handleClearAllStock = async () => {
+    const confirm = prompt("WARNING: This will set ALL items in ALL locations to 0 quantity! Type 'CLEAR STOCK' to confirm.");
+    if (confirm !== 'CLEAR STOCK') {
+      if (confirm !== null) alert("Reset cancelled: Confirmation text did not match.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/inventory/clear-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmText: confirm })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("All stock quantities have been reset to 0.");
+        fetchLocations();
+      } else {
+        alert("Error: " + data.error);
+      }
+    } catch (e: any) {
+      alert("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
   if (loading) return <div>Loading locations...</div>;
 
   // Smart Product Search
@@ -450,8 +477,16 @@ export default function LocationsTab() {
       </div>
 
       {/* List Locations */}
-      <div className="md:col-span-2">
-        <h2 className="text-xl font-bold mb-4">Existing Locations</h2>
+      <div className="md:col-span-2 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Existing Locations</h2>
+          <button 
+            onClick={handleClearAllStock}
+            className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition shadow-sm"
+          >
+            Clear All Stock to 0
+          </button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {locations.map(loc => {
             const totalQty = loc.inventory.reduce((sum: number, inv: any) => sum + inv.quantity, 0);
