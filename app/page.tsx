@@ -198,9 +198,9 @@ export default function POSDashboard() {
       const orderId = String(row.colB || "").trim();
       const notes = String(row.colC || "").trim();
       
-      const isCyanInSheet = row.cells.some(c => c.backgroundColor === 'rgb(0, 255, 255)');
+      const isCyanInSheet = row.cells.slice(7, 13).some(c => c.backgroundColor === 'rgb(0, 255, 255)');
       const isLocallyScanned = scannedIds.includes(orderId);
-      const isStrikethrough = row.cells.some(c => c.strikethrough === true);
+      const isStrikethrough = row.cells.slice(7, 13).some(c => c.strikethrough === true);
 
       if (isCyanInSheet || isLocallyScanned || isStrikethrough) return false; 
 
@@ -467,7 +467,7 @@ export default function POSDashboard() {
     } 
 
     // 4. Alert: If the order is already marked as cyan in the Google Sheet from a previous session
-    const isAlreadyCyan = orderExists.cells.some((c: any) => c.backgroundColor === 'rgb(0, 255, 255)' || c.isCyan);
+    const isAlreadyCyan = orderExists.cells.slice(7, 13).some((c: any) => c.backgroundColor === 'rgb(0, 255, 255)' || c.isCyan);
     if (isAlreadyCyan) {
       alert(`⚠️ ALREADY PACKAGED: Order [${code}] was already marked as packaged (cyan) in the Google Sheet.`);
       return;
@@ -493,26 +493,6 @@ export default function POSDashboard() {
         orderId: code // <-- NEW: Sending the actual Order ID to fix the shifting row bug!
       })
     }).catch(err => console.error("Failed to update Sheet color:", err));
-    /* Use this code if you want to alert on backend errors, but it will slow down the scanning process 
-    // Fire and forget background fetch, but listen for backend errors
-    fetch("/api/scanner", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        action: "color", 
-        rowIndex: orderExists.originalRowIndex,
-        orderId: code 
-      })
-    })
-    .then(async (res) => {
-      const data = await res.json();
-      if (!data.success) {
-        // This alerts you if the row shifted and couldn't be found!
-        alert(`❌ GOOGLE SHEETS ERROR: Could not color row cyan.\n\nReason: ${data.error}`);
-      }
-    })
-    .catch(err => console.error("Network failed to connect to server:", err));
-    */
   };
 
   const markAsPrinted = async () => {
@@ -618,6 +598,7 @@ export default function POSDashboard() {
                     ) : (
                       allOrders.map((row, index) => {
                         const isCyan = scannedIds.includes(row.colB) || row.cells.slice(7, 13).some(c => c.backgroundColor === 'rgb(0, 255, 255)');
+                        const isRowStrikethrough = row.cells.slice(7, 13).some(c => c.strikethrough);
                         return (
                           <tr key={index} className="hover:bg-gray-50 transition border-b">
                             {row.cells.map((cell, cellIndex) => (
@@ -628,7 +609,7 @@ export default function POSDashboard() {
                                 style={{ 
                                   backgroundColor: isCyan ? '#00FFFF' : (cell.backgroundColor !== 'transparent' ? cell.backgroundColor : 'inherit'),
                                   color: isCyan ? '#000000' : (cell.textColor !== 'transparent' ? cell.textColor : 'inherit'),
-                                  textDecoration: cell.strikethrough ? 'line-through' : 'none'
+                                  textDecoration: (isRowStrikethrough || cell.strikethrough) ? 'line-through' : 'none'
                                 }}
                               >
                                 {cellIndex === 0 ? row.formattedDate : cell.value}
@@ -691,6 +672,7 @@ export default function POSDashboard() {
                   ) : (
                     filteredOrders.map((row, index) => {
                       const isSelected = selectedForPrint.includes(row.colB);
+                      const isRowStrikethrough = row.cells.slice(7, 13).some(c => c.strikethrough);
                       return (
                         <tr key={index} className={`${isSelected ? 'bg-blue-50' : 'bg-white'} hover:bg-blue-100 transition border-b`}>
                           <td className="p-4 border-r text-center bg-gray-50 select-none">
@@ -723,7 +705,7 @@ export default function POSDashboard() {
                               style={{ 
                                 backgroundColor: cell.backgroundColor !== 'transparent' ? cell.backgroundColor : 'inherit',
                                 color: cell.textColor !== 'transparent' ? cell.textColor : 'inherit',
-                                textDecoration: cell.strikethrough ? 'line-through' : 'none'
+                                textDecoration: (isRowStrikethrough || cell.strikethrough) ? 'line-through' : 'none'
                               }}
                             >
                               {cellIndex === 0 ? row.formattedDate : cell.value}
@@ -1210,13 +1192,14 @@ export default function POSDashboard() {
 
                   if (visibleProducts.length === 0) return null;
 
+                  const isRowStrikethrough = order.cells.slice(7, 13).some(c => c.strikethrough);
                   const getStyle = (colIndex: number) => {
                     if (!order.cells || !order.cells[colIndex]) return {};
                     const cell = order.cells[colIndex];
                     const styleObj: any = {};
                     if (cell.backgroundColor && cell.backgroundColor !== 'transparent') styleObj.backgroundColor = cell.backgroundColor;
                     if (cell.textColor && cell.textColor !== 'transparent') styleObj.color = cell.textColor;
-                    if (cell.strikethrough) styleObj.textDecoration = 'line-through';
+                    if (isRowStrikethrough || cell.strikethrough) styleObj.textDecoration = 'line-through';
                     return styleObj;
                   };
                   return (

@@ -100,7 +100,7 @@ export async function GET(request: Request) {
       const isSeeWa = /see wa/i.test(colCLower);
       const isNumberOff = /number off/i.test(colCLower);
       const isSeeWhatsapp = /see whatsapp/i.test(colCLower);
-      const isStrikethrough = o.cells[1]?.strikethrough;
+      const isStrikethrough = o.cells.slice(7, 13).some((c: any) => c.strikethrough);
       const isCyan = o.cells.slice(7, 13).some((c: any) => c.isCyan);
 
       if (
