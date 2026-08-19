@@ -10,6 +10,7 @@ interface CellData {
   backgroundColor: string;
   textColor: string;
   strikethrough: boolean;
+  isCyan?: boolean;
   note: string | null;
 }
 
