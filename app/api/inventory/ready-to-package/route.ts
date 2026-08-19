@@ -112,7 +112,7 @@ export async function GET(request: Request) {
         const value = cell.formattedValue || cell.userEnteredValue?.stringValue || cell.userEnteredValue?.numberValue || "";
         const isStrikethrough = cell.effectiveFormat?.textFormat?.strikethrough || false;
         const bg = cell.effectiveFormat?.backgroundColor;
-        const isCyan = bg && bg.red === 0 && Math.abs((bg.green || 0) - 1) < 0.1 && Math.abs((bg.blue || 0) - 1) < 0.1;
+        const isCyan = bg && (bg.red || 0) === 0 && Math.abs((bg.green || 0) - 1) < 0.1 && Math.abs((bg.blue || 0) - 1) < 0.1;
         return { value: String(value), strikethrough: isStrikethrough, isCyan };
       });
 

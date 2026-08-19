@@ -1193,12 +1193,18 @@ export default function POSDashboard() {
                   if (visibleProducts.length === 0) return null;
 
                   const isRowStrikethrough = order.cells.slice(7, 13).some(c => c.strikethrough);
+                  const isRowCyan = order.cells.slice(7, 13).some(c => c.backgroundColor === 'rgb(0, 255, 255)' || c.isCyan);
                   const getStyle = (colIndex: number) => {
                     if (!order.cells || !order.cells[colIndex]) return {};
                     const cell = order.cells[colIndex];
                     const styleObj: any = {};
-                    if (cell.backgroundColor && cell.backgroundColor !== 'transparent') styleObj.backgroundColor = cell.backgroundColor;
-                    if (cell.textColor && cell.textColor !== 'transparent') styleObj.color = cell.textColor;
+                    if (isRowCyan) {
+                      styleObj.backgroundColor = '#00FFFF';
+                      styleObj.color = '#000000';
+                    } else {
+                      if (cell.backgroundColor && cell.backgroundColor !== 'transparent') styleObj.backgroundColor = cell.backgroundColor;
+                      if (cell.textColor && cell.textColor !== 'transparent') styleObj.color = cell.textColor;
+                    }
                     if (isRowStrikethrough || cell.strikethrough) styleObj.textDecoration = 'line-through';
                     return styleObj;
                   };
