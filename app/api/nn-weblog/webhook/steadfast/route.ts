@@ -10,15 +10,24 @@ export async function POST(request: NextRequest) {
       request.headers.get("X-Signature") ||
       request.headers.get("x-packzy-signature");
 
+    const authHeader =
+      request.headers.get("authorization") ||
+      request.headers.get("Authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : authHeader?.trim();
+
     const webhookSecret =
       process.env.STEADFAST_WEBHOOK_SECRET || process.env.STEADFAST_SECRET_KEY || "";
 
-    // Signature verification if secret is configured
+    // Signature / Token verification if secret is configured
     if (webhookSecret && webhookSecret !== "test_webhook_secret_key") {
-      const isValid = verifySteadfastSignature(rawBody, signature, webhookSecret);
-      if (!isValid) {
+      const isBearerMatch = bearerToken && bearerToken === webhookSecret;
+      const isSignatureValid = verifySteadfastSignature(rawBody, signature, webhookSecret);
+
+      if (!isBearerMatch && !isSignatureValid) {
         return NextResponse.json(
-          { error: "Invalid webhook signature" },
+          { error: "Invalid webhook signature or authorization token" },
           { status: 401 }
         );
       }
