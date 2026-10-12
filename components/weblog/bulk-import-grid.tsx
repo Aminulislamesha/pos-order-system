@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
+import { ResetWeblogButton } from "./reset-weblog-button";
 
 export interface ProductItem {
   product: string;
@@ -445,8 +446,13 @@ export function BulkImportGrid() {
             className="gap-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Clear</span>
+            <span>Clear Grid</span>
           </Button>
+
+          <ResetWeblogButton
+            onSuccess={handleClear}
+            label="Reset Weblog"
+          />
 
           <Button
             onClick={handleSaveBulk}

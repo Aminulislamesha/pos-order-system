@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/weblog/utils";
+import { ResetWeblogButton } from "@/components/weblog/reset-weblog-button";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <ResetWeblogButton label="Clear All Orders" />
           <Link href="/nn-weblog/import">
             <Button size="sm" className="gap-1.5 shadow-sm bg-blue-600 hover:bg-blue-700 text-white">
               <span>Bulk Import</span>

@@ -6,6 +6,7 @@ import { Save, CheckCircle2, Clock, ShieldAlert, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ResetWeblogButton } from "./reset-weblog-button";
 
 interface SettingsFormProps {
   initialSettings: Record<string, string>;
@@ -160,6 +161,30 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone: Application Reset */}
+      <Card className="border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 text-rose-600 dark:text-rose-400">
+            <ShieldAlert className="h-4 w-4" />
+            <span>Danger Zone: Clear Application Data</span>
+          </CardTitle>
+          <CardDescription>
+            Permanently clear all NN Weblog orders, tracking history, and customers to start fresh anytime.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="text-xs text-slate-500 max-w-lg">
+            This will wipe all orders, customers, and tracking audit records from the database. POS Inventory and POS products will remain completely untouched.
+          </div>
+          <ResetWeblogButton
+            label="Reset Weblog Application"
+            size="default"
+            variant="destructive"
+            className="bg-rose-600 text-white hover:bg-rose-700 border-none shrink-0"
+          />
         </CardContent>
       </Card>
 
