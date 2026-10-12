@@ -18,9 +18,11 @@ export async function POST(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    // 60-second status cache limit enforcement
+    const force = request.nextUrl.searchParams.get("force") === "true";
+
+    // 60-second status cache limit enforcement (unless forced)
     const COOLDOWN_MS = 60 * 1000;
-    if (order.last_status_checked_at) {
+    if (!force && order.last_status_checked_at) {
       const elapsed = Date.now() - new Date(order.last_status_checked_at).getTime();
       if (elapsed < COOLDOWN_MS) {
         const secondsRemaining = Math.ceil((COOLDOWN_MS - elapsed) / 1000);

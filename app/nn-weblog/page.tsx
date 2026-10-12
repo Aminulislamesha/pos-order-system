@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/weblog/utils";
+import { SyncLiveStatusButton } from "@/components/weblog/sync-live-status-button";
+import { InlineRowStatusRefresher } from "@/components/weblog/inline-row-status-refresher";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,7 @@ export default async function DashboardPage() {
   let totalOrders = 0;
   let deliveredOrders = 0;
   let cancelledOrders = 0;
+  let pendingCount = 0;
   let totalRevenue = 0;
   let pendingFollowUpsCount = 0;
   let repeatCustomersCount = 0;
@@ -54,6 +57,7 @@ export default async function DashboardPage() {
       ordersCount,
       deliveredCount,
       cancelledCount,
+      pendingOrdersCount,
       revenueAgg,
       followUpsCount,
       repeatCount,
@@ -62,6 +66,7 @@ export default async function DashboardPage() {
       prisma.order.count(),
       prisma.order.count({ where: { status: "delivered" } }),
       prisma.order.count({ where: { status: "cancelled" } }),
+      prisma.order.count({ where: { status: "pending" } }),
       prisma.order.aggregate({ _sum: { total_bill: true } }),
       prisma.customer.count({
         where: {
@@ -87,6 +92,7 @@ export default async function DashboardPage() {
     totalOrders = ordersCount;
     deliveredOrders = deliveredCount;
     cancelledOrders = cancelledCount;
+    pendingCount = pendingOrdersCount;
     totalRevenue = revenueAgg._sum.total_bill || 0;
     pendingFollowUpsCount = followUpsCount;
     repeatCustomersCount = repeatCount;
@@ -107,11 +113,16 @@ export default async function DashboardPage() {
             Live synchronization with Packzy Courier Webhook, automated customer retention tracking, and sub-millisecond database queries.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SyncLiveStatusButton
+            pendingCount={pendingCount}
+            currentPageOrderIds={recentOrders.map((o) => o.id)}
+            label="Sync Courier Status"
+          />
           <Link href="/nn-weblog/import">
             <Button
               size="sm"
-              className="bg-white text-blue-700 hover:bg-blue-50 font-semibold gap-1.5 shadow-sm"
+              className="bg-white text-blue-700 hover:bg-blue-50 font-semibold gap-1.5 shadow-sm cursor-pointer"
             >
               <PlusCircle className="h-4 w-4" />
               <span>Bulk Import</span>
@@ -121,7 +132,7 @@ export default async function DashboardPage() {
             <Button
               size="sm"
               variant="outline"
-              className="border-white/30 bg-white/10 text-white hover:bg-white/20 gap-1.5"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20 gap-1.5 cursor-pointer"
             >
               <span>View All Orders</span>
               <ArrowRight className="h-4 w-4" />
@@ -307,7 +318,11 @@ export default async function DashboardPage() {
                         {formatCurrency(o.total_bill)}
                       </td>
                       <td className="px-6 py-4">
-                        <Badge status={o.status}>{o.status}</Badge>
+                        <InlineRowStatusRefresher
+                          orderId={o.id}
+                          invoiceId={o.invoice_id}
+                          initialStatus={o.status}
+                        />
                       </td>
                       <td className="px-6 py-4 text-right">
                         <Link href={`/nn-weblog/orders/${o.id}`}>

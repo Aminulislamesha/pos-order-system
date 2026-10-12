@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeSteadfastStatus, verifySteadfastSignature } from "@/lib/weblog/steadfast";
 import { ensureWeblogTables } from "@/lib/weblog/init-db";
+import { getBaseInvoiceId } from "@/lib/weblog/utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,17 +19,28 @@ export async function POST(request: NextRequest) {
       ? authHeader.slice(7).trim()
       : authHeader?.trim();
 
-    const webhookSecret =
-      process.env.STEADFAST_WEBHOOK_SECRET || process.env.STEADFAST_SECRET_KEY || "";
+    const explicitWebhookSecret = process.env.STEADFAST_WEBHOOK_SECRET || "";
+    const apiKey = process.env.STEADFAST_API_KEY || "";
+    const secretKey = process.env.STEADFAST_SECRET_KEY || "";
 
-    // Signature / Token verification if secret is configured
-    if (webhookSecret && webhookSecret !== "test_webhook_secret_key") {
-      const isBearerMatch = bearerToken && bearerToken === webhookSecret;
-      const isSignatureValid = verifySteadfastSignature(rawBody, signature, webhookSecret);
+    const apiKeyHeader =
+      request.headers.get("api-key") ||
+      request.headers.get("Api-Key") ||
+      request.headers.get("x-api-key");
+    const secretKeyHeader =
+      request.headers.get("secret-key") ||
+      request.headers.get("Secret-Key") ||
+      request.headers.get("x-secret-key");
 
-      if (!isBearerMatch && !isSignatureValid) {
+    // Only enforce strict token check if STEADFAST_WEBHOOK_SECRET is explicitly set
+    if (explicitWebhookSecret && explicitWebhookSecret !== "test_webhook_secret_key") {
+      const isBearerMatch = bearerToken && bearerToken === explicitWebhookSecret;
+      const isSignatureValid = verifySteadfastSignature(rawBody, signature, explicitWebhookSecret);
+      const isApiKeyMatch = apiKeyHeader === apiKey || secretKeyHeader === secretKey;
+
+      if (!isBearerMatch && !isSignatureValid && !isApiKeyMatch) {
         return NextResponse.json(
-          { error: "Invalid webhook signature or authorization token" },
+          { error: "Invalid webhook credentials or token" },
           { status: 401 }
         );
       }
@@ -85,12 +97,29 @@ export async function POST(request: NextRequest) {
       (payload.remarks as string) ||
       `Steadfast Webhook event: ${rawStatus || newStatus}`;
 
-    // Lookup order
+    // Lookup order with fallback to base invoice or consignment id
     await ensureWeblogTables();
-    const order = await prisma.order.findFirst({
+    let order = await prisma.order.findFirst({
       where: { invoice_id: invoiceId },
       orderBy: { date: "desc" },
     });
+
+    if (!order) {
+      const baseInv = getBaseInvoiceId(invoiceId);
+      if (baseInv && baseInv !== invoiceId) {
+        order = await prisma.order.findFirst({
+          where: { invoice_id: baseInv },
+          orderBy: { date: "desc" },
+        });
+      }
+    }
+
+    if (!order && consignmentId) {
+      order = await prisma.order.findFirst({
+        where: { consignment_id: consignmentId },
+        orderBy: { date: "desc" },
+      });
+    }
 
     if (!order) {
       return NextResponse.json(

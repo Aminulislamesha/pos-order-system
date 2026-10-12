@@ -93,10 +93,9 @@ export async function fetchSteadfastStatusByInvoice(invoiceId: string): Promise<
     invoiceCandidates.push(baseInv);
   }
 
-  // Real live working Packzy / Steadfast endpoints
+  // Real live working Packzy / Steadfast endpoint
   const hosts = [
     "https://portal.packzy.com",
-    "https://portal.steadfast.com.bd",
   ];
 
   let lastError = "Unable to connect to Packzy / Steadfast Courier API";
@@ -112,7 +111,7 @@ export async function fetchSteadfastStatusByInvoice(invoiceId: string): Promise<
             "Secret-Key": secretKey,
             "Content-Type": "application/json",
           },
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(6000),
         });
 
         if (response.status === 404) {

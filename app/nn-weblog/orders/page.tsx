@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/weblog/utils";
 import { ResetWeblogButton } from "@/components/weblog/reset-weblog-button";
+import { SyncLiveStatusButton } from "@/components/weblog/sync-live-status-button";
+import { InlineRowStatusRefresher } from "@/components/weblog/inline-row-status-refresher";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +47,13 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   }
 
   let totalCount = 0;
+  let pendingCount = 0;
   let orders: any[] = [];
 
   try {
-    const [count, list] = await Promise.all([
+    const [count, pendingTotal, list] = await Promise.all([
       prisma.order.count({ where: whereClause }),
+      prisma.order.count({ where: { status: "pending" } }),
       prisma.order.findMany({
         where: whereClause,
         skip: (page - 1) * pageSize,
@@ -61,6 +65,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
       }),
     ]);
     totalCount = count;
+    pendingCount = pendingTotal;
     orders = list;
   } catch (err) {
     console.error("Orders query error:", err);
@@ -91,10 +96,14 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SyncLiveStatusButton
+            pendingCount={pendingCount}
+            currentPageOrderIds={orders.map((o) => o.id)}
+          />
           <ResetWeblogButton label="Clear All Orders" />
           <Link href="/nn-weblog/import">
-            <Button size="sm" className="gap-1.5 shadow-sm bg-blue-600 hover:bg-blue-700 text-white">
+            <Button size="sm" className="gap-1.5 shadow-sm bg-blue-600 hover:bg-blue-700 text-white cursor-pointer">
               <span>Bulk Import</span>
             </Button>
           </Link>
@@ -189,7 +198,11 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                         {formatCurrency(o.total_bill)}
                       </td>
                       <td className="px-6 py-4">
-                        <Badge status={o.status}>{o.status}</Badge>
+                        <InlineRowStatusRefresher
+                          orderId={o.id}
+                          invoiceId={o.invoice_id}
+                          initialStatus={o.status}
+                        />
                       </td>
                       <td className="px-6 py-4 text-right">
                         <Link href={`/nn-weblog/orders/${o.id}`}>

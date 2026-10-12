@@ -11,11 +11,14 @@ import {
   Database,
   Sparkles,
   ArrowRightLeft,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
 import { ResetWeblogButton } from "./reset-weblog-button";
+import { SyncLiveStatusButton } from "./sync-live-status-button";
 
 export interface ProductItem {
   product: string;
@@ -499,12 +502,27 @@ export function BulkImportGrid() {
 
       {/* Import Completed Stats */}
       {stats && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-2 mb-4">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            <h3 className="font-bold text-emerald-900 dark:text-emerald-300">
-              Bulk Import Successfully Completed
-            </h3>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 dark:border-emerald-900/60 dark:bg-emerald-950/20 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <h3 className="font-bold text-emerald-900 dark:text-emerald-300">
+                Bulk Import Successfully Completed
+              </h3>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <SyncLiveStatusButton
+                pendingCount={stats.inserted}
+                label="⚡ Sync Live Courier Status with Steadfast"
+              />
+              <Link href="/nn-weblog/orders">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs bg-white text-slate-800 border-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200">
+                  <span>View Orders</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-xl bg-white p-3.5 shadow-sm border border-emerald-100 dark:bg-slate-900 dark:border-slate-800">
