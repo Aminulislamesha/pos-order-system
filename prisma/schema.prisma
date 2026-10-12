@@ -94,3 +94,66 @@ model Size {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model Customer {
+  id                  String    @id @default(uuid())
+  name                String
+  phone               String    @unique
+  total_orders        Int       @default(0)
+  last_order_date     DateTime?
+  last_follow_up_date DateTime?
+  is_followed_up      Boolean   @default(false)
+  orders              Order[]
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([phone])
+  @@index([name])
+  @@index([last_order_date])
+}
+
+model Order {
+  id                     String            @id @default(uuid())
+  invoice_id             String            @unique
+  customer_id            String
+  customer               Customer          @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  date                   DateTime
+  address                String
+  details                String?           @db.Text
+  total_bill             Float             @default(0.0)
+  delivery_charge        Float             @default(0.0)
+  status                 String            @default("pending")
+  tracking_code          String?
+  consignment_id         String?
+  last_status_checked_at DateTime?
+  tracking_history       TrackingHistory[]
+
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  @@index([invoice_id])
+  @@index([customer_id])
+  @@index([status])
+  @@index([date])
+}
+
+model TrackingHistory {
+  id              String   @id @default(uuid())
+  order_id        String
+  order           Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  previous_status String?
+  new_status      String
+  message         String?  @db.Text
+  timestamp       DateTime @default(now())
+
+  @@index([order_id])
+  @@index([timestamp])
+}
+
+model Settings {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
