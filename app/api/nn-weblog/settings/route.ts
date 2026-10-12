@@ -7,8 +7,11 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   steadfast_auto_sync: "true",
 };
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export async function GET() {
   try {
+    await ensureWeblogTables();
     const records = await prisma.settings.findMany();
     const settingsMap = { ...DEFAULT_SETTINGS };
 
@@ -25,6 +28,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureWeblogTables();
     const body = await request.json();
     const { settings } = body;
 

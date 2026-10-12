@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeSteadfastStatus, verifySteadfastSignature } from "@/lib/weblog/steadfast";
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
       `Steadfast Webhook event: ${rawStatus || newStatus}`;
 
     // Lookup order
+    await ensureWeblogTables();
     const order = await prisma.order.findUnique({
       where: { invoice_id: invoiceId },
     });

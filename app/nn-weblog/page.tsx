@@ -17,62 +17,83 @@ import { formatCurrency, formatDate } from "@/lib/weblog/utils";
 
 export const dynamic = "force-dynamic";
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function DashboardPage() {
-  // Fetch Settings defaults
-  const settingsRecords = await prisma.settings.findMany();
-  const settingsMap: Record<string, string> = {
+  await ensureWeblogTables();
+
+  let settingsMap: Record<string, string> = {
     inactivity_days: "30",
     repeat_customer_days: "30",
   };
-  for (const s of settingsRecords) {
-    settingsMap[s.key] = s.value;
-  }
+  let totalOrders = 0;
+  let deliveredOrders = 0;
+  let cancelledOrders = 0;
+  let totalRevenue = 0;
+  let pendingFollowUpsCount = 0;
+  let repeatCustomersCount = 0;
+  let recentOrders: any[] = [];
 
   const inactivityDays = parseInt(settingsMap.inactivity_days || "30", 10);
   const repeatDays = parseInt(settingsMap.repeat_customer_days || "30", 10);
 
-  const inactivityThreshold = new Date();
-  inactivityThreshold.setDate(inactivityThreshold.getDate() - inactivityDays);
+  try {
+    const settingsRecords = await prisma.settings.findMany();
+    for (const s of settingsRecords) {
+      settingsMap[s.key] = s.value;
+    }
 
-  const repeatThreshold = new Date();
-  repeatThreshold.setDate(repeatThreshold.getDate() - repeatDays);
+    const inactivityThreshold = new Date();
+    inactivityThreshold.setDate(inactivityThreshold.getDate() - inactivityDays);
 
-  // Parallel database metrics aggregation
-  const [
-    totalOrders,
-    deliveredOrders,
-    cancelledOrders,
-    revenueAgg,
-    pendingFollowUpsCount,
-    repeatCustomersCount,
-    recentOrders,
-  ] = await Promise.all([
-    prisma.order.count(),
-    prisma.order.count({ where: { status: "delivered" } }),
-    prisma.order.count({ where: { status: "cancelled" } }),
-    prisma.order.aggregate({ _sum: { total_bill: true } }),
-    prisma.customer.count({
-      where: {
-        last_order_date: { lt: inactivityThreshold },
-        is_followed_up: false,
-      },
-    }),
-    prisma.customer.count({
-      where: {
-        total_orders: { gt: 1 },
-        last_order_date: { gte: repeatThreshold },
-      },
-    }),
-    prisma.order.findMany({
-      take: 8,
-      orderBy: { date: "desc" },
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-      },
-    }),
-  ]);
+    const repeatThreshold = new Date();
+    repeatThreshold.setDate(repeatThreshold.getDate() - repeatDays);
 
-  const totalRevenue = revenueAgg._sum.total_bill || 0;
+    // Parallel database metrics aggregation
+    const [
+      ordersCount,
+      deliveredCount,
+      cancelledCount,
+      revenueAgg,
+      followUpsCount,
+      repeatCount,
+      ordersList,
+    ] = await Promise.all([
+      prisma.order.count(),
+      prisma.order.count({ where: { status: "delivered" } }),
+      prisma.order.count({ where: { status: "cancelled" } }),
+      prisma.order.aggregate({ _sum: { total_bill: true } }),
+      prisma.customer.count({
+        where: {
+          last_order_date: { lt: inactivityThreshold },
+          is_followed_up: false,
+        },
+      }),
+      prisma.customer.count({
+        where: {
+          total_orders: { gt: 1 },
+          last_order_date: { gte: repeatThreshold },
+        },
+      }),
+      prisma.order.findMany({
+        take: 8,
+        orderBy: { date: "desc" },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+        },
+      }),
+    ]);
+
+    totalOrders = ordersCount;
+    deliveredOrders = deliveredCount;
+    cancelledOrders = cancelledCount;
+    totalRevenue = revenueAgg._sum.total_bill || 0;
+    pendingFollowUpsCount = followUpsCount;
+    repeatCustomersCount = repeatCount;
+    recentOrders = ordersList;
+  } catch (err) {
+    console.error("Dashboard database query error:", err);
+  }
 
   return (
     <div className="space-y-8">

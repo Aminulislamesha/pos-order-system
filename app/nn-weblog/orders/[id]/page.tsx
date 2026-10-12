@@ -22,7 +22,10 @@ interface OrderDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
+  await ensureWeblogTables();
   const { id } = await params;
 
   const order = await prisma.order.findUnique({

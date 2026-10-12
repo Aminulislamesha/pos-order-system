@@ -23,7 +23,10 @@ interface CustomerDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
+  await ensureWeblogTables();
   const { id } = await params;
 
   const customer = await prisma.customer.findUnique({

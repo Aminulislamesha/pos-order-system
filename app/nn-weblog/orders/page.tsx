@@ -19,7 +19,10 @@ interface OrdersPageProps {
   }>;
 }
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function OrdersPage({ searchParams }: OrdersPageProps) {
+  await ensureWeblogTables();
   const params = await searchParams;
   const statusFilter = params.status || "";
   const query = params.q || "";
@@ -40,18 +43,27 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     ];
   }
 
-  const [totalCount, orders] = await Promise.all([
-    prisma.order.count({ where: whereClause }),
-    prisma.order.findMany({
-      where: whereClause,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { date: "desc" },
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-      },
-    }),
-  ]);
+  let totalCount = 0;
+  let orders: any[] = [];
+
+  try {
+    const [count, list] = await Promise.all([
+      prisma.order.count({ where: whereClause }),
+      prisma.order.findMany({
+        where: whereClause,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { date: "desc" },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+        },
+      }),
+    ]);
+    totalCount = count;
+    orders = list;
+  } catch (err) {
+    console.error("Orders query error:", err);
+  }
 
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 

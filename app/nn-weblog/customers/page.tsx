@@ -14,7 +14,10 @@ interface CustomersPageProps {
   }>;
 }
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function CustomersPage({ searchParams }: CustomersPageProps) {
+  await ensureWeblogTables();
   const params = await searchParams;
   const query = params.q || "";
   const page = parseInt(params.page || "1", 10);
@@ -28,18 +31,27 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
     ];
   }
 
-  const [totalCount, customers] = await Promise.all([
-    prisma.customer.count({ where: whereClause }),
-    prisma.customer.findMany({
-      where: whereClause,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { updatedAt: "desc" },
-      include: {
-        _count: { select: { orders: true } },
-      },
-    }),
-  ]);
+  let totalCount = 0;
+  let customers: any[] = [];
+
+  try {
+    const [count, list] = await Promise.all([
+      prisma.customer.count({ where: whereClause }),
+      prisma.customer.findMany({
+        where: whereClause,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          _count: { select: { orders: true } },
+        },
+      }),
+    ]);
+    totalCount = count;
+    customers = list;
+  } catch (err) {
+    console.error("Customers query error:", err);
+  }
 
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 

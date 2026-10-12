@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q")?.trim();
@@ -10,6 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    await ensureWeblogTables();
     const [customers, orders] = await Promise.all([
       prisma.customer.findMany({
         where: {

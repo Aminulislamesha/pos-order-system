@@ -14,8 +14,11 @@ export interface RawImportRow {
   delivery_charge?: number | string;
 }
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export async function POST(request: NextRequest) {
   try {
+    await ensureWeblogTables();
     const body = await request.json();
     const rows: RawImportRow[] = body.rows;
 

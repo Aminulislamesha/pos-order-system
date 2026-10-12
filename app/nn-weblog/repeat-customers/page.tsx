@@ -13,39 +13,47 @@ export const metadata = {
   description: "High-value returning customers placing multiple orders within configured timeframe",
 };
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function RepeatCustomersPage() {
-  // Read repeat period from Settings DB
-  const repeatSetting = await prisma.settings.findUnique({
-    where: { key: "repeat_customer_days" },
-  });
-  const repeatDays = parseInt(repeatSetting?.value || "30", 10);
+  await ensureWeblogTables();
+  let repeatDays = 30;
+  let customers: any[] = [];
 
-  const thresholdDate = new Date();
-  thresholdDate.setDate(thresholdDate.getDate() - repeatDays);
+  try {
+    const repeatSetting = await prisma.settings.findUnique({
+      where: { key: "repeat_customer_days" },
+    });
+    repeatDays = parseInt(repeatSetting?.value || "30", 10);
 
-  // Prisma query: Customers with >1 order placed within the configured Repeat Customer timeframe
-  const customers = await prisma.customer.findMany({
-    where: {
-      total_orders: { gt: 1 },
-      last_order_date: { gte: thresholdDate },
-    },
-    orderBy: {
-      total_orders: "desc", // Highest order count first
-    },
-    include: {
-      orders: {
-        take: 3,
-        orderBy: { date: "desc" },
-        select: {
-          id: true,
-          invoice_id: true,
-          date: true,
-          total_bill: true,
-          status: true,
+    const thresholdDate = new Date();
+    thresholdDate.setDate(thresholdDate.getDate() - repeatDays);
+
+    customers = await prisma.customer.findMany({
+      where: {
+        total_orders: { gt: 1 },
+        last_order_date: { gte: thresholdDate },
+      },
+      orderBy: {
+        total_orders: "desc",
+      },
+      include: {
+        orders: {
+          take: 3,
+          orderBy: { date: "desc" },
+          select: {
+            id: true,
+            invoice_id: true,
+            date: true,
+            total_bill: true,
+            status: true,
+          },
         },
       },
-    },
-  });
+    });
+  } catch (err) {
+    console.error("Repeat customers query error:", err);
+  }
 
   return (
     <div className="space-y-6">
@@ -119,7 +127,7 @@ export default async function RepeatCustomersPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {c.orders.map((o) => (
+                          {c.orders?.map((o: any) => (
                             <Link key={o.id} href={`/nn-weblog/orders/${o.id}`}>
                               <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
                                 {o.invoice_id}

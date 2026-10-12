@@ -8,15 +8,22 @@ export const metadata = {
   description: "Configure system inactivity thresholds and retention analytics",
 };
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function SettingsPage() {
-  const records = await prisma.settings.findMany();
+  await ensureWeblogTables();
   const settingsMap: Record<string, string> = {
     inactivity_days: "30",
     repeat_customer_days: "30",
   };
 
-  for (const s of records) {
-    settingsMap[s.key] = s.value;
+  try {
+    const records = await prisma.settings.findMany();
+    for (const s of records) {
+      settingsMap[s.key] = s.value;
+    }
+  } catch (err) {
+    console.error("Settings query error:", err);
   }
 
   return (

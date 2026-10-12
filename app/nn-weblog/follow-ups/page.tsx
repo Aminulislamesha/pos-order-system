@@ -13,29 +13,37 @@ export const metadata = {
   description: "Customers requiring customer-success outreach due to order inactivity",
 };
 
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
+
 export default async function FollowUpsPage() {
-  // Read inactivity days from Settings DB
-  const inactivitySetting = await prisma.settings.findUnique({
-    where: { key: "inactivity_days" },
-  });
-  const inactivityDays = parseInt(inactivitySetting?.value || "30", 10);
+  await ensureWeblogTables();
+  let inactivityDays = 30;
+  let customers: any[] = [];
 
-  const thresholdDate = new Date();
-  thresholdDate.setDate(thresholdDate.getDate() - inactivityDays);
+  try {
+    const inactivitySetting = await prisma.settings.findUnique({
+      where: { key: "inactivity_days" },
+    });
+    inactivityDays = parseInt(inactivitySetting?.value || "30", 10);
 
-  // Prisma query: Customers whose last order date exceeds the inactivity period
-  const customers = await prisma.customer.findMany({
-    where: {
-      last_order_date: { lt: thresholdDate },
-      is_followed_up: false,
-    },
-    orderBy: {
-      last_order_date: "asc", // Most inactive first
-    },
-    include: {
-      _count: { select: { orders: true } },
-    },
-  });
+    const thresholdDate = new Date();
+    thresholdDate.setDate(thresholdDate.getDate() - inactivityDays);
+
+    customers = await prisma.customer.findMany({
+      where: {
+        last_order_date: { lt: thresholdDate },
+        is_followed_up: false,
+      },
+      orderBy: {
+        last_order_date: "asc",
+      },
+      include: {
+        _count: { select: { orders: true } },
+      },
+    });
+  } catch (err) {
+    console.error("Follow-ups query error:", err);
+  }
 
   return (
     <div className="space-y-6">
