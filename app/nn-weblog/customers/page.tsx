@@ -100,7 +100,9 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {customers.map((c) => (
+                  {customers.map((c) => {
+                    const orderCount = Math.max(c.total_orders, c._count?.orders ?? 0, 1);
+                    return (
                     <tr
                       key={c.id}
                       className="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors"
@@ -113,7 +115,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
                       </td>
                       <td className="px-6 py-4">
                         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-                          {c.total_orders} orders
+                          {orderCount} {orderCount === 1 ? "order" : "orders"}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-xs text-slate-500">
@@ -136,7 +138,8 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
                         </Link>
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
                 </tbody>
               </table>
             </div>

@@ -89,6 +89,18 @@ export async function ensureWeblogTables() {
       await prisma.$executeRawUnsafe(`
         CREATE UNIQUE INDEX IF NOT EXISTS "Settings_key_key" ON "Settings"("key");
       `);
+
+      // Auto-repair customer total_orders if any customer has orders but total_orders is 0
+      await prisma.$executeRawUnsafe(`
+        UPDATE "Customer" c
+        SET total_orders = sub.cnt
+        FROM (
+          SELECT customer_id, GREATEST(1, COUNT(DISTINCT id)) as cnt
+          FROM "Order"
+          GROUP BY customer_id
+        ) sub
+        WHERE c.id = sub.customer_id AND c.total_orders = 0;
+      `);
     } catch (e) {
       console.error("Error creating weblog tables in database:", e);
     }

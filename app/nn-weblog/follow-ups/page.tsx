@@ -103,6 +103,8 @@ export default async function FollowUpsPage() {
                         )
                       : 0;
 
+                    const orderCount = Math.max(c.total_orders, c._count?.orders ?? 0, 1);
+
                     return (
                       <tr
                         key={c.id}
@@ -116,7 +118,7 @@ export default async function FollowUpsPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                            {c.total_orders} {c.total_orders === 1 ? "order" : "orders"}
+                            {orderCount} {orderCount === 1 ? "order" : "orders"}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-xs text-slate-500">

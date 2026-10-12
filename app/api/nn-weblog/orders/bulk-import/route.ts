@@ -265,10 +265,14 @@ export async function POST(request: NextRequest) {
 
     // 6. Update customer total_orders and last_order_date
     const updatePromises = Array.from(customerOrderCounts.entries()).map(([customerId, agg]) => {
+      const currentCust = Array.from(customerMap.values()).find((c) => c.id === customerId);
+      const currentTotal = currentCust?.total_orders || 0;
+      const incrementCount = currentTotal === 0 ? Math.max(1, agg.count) : agg.count;
+
       return prisma.customer.update({
         where: { id: customerId },
         data: {
-          total_orders: { increment: agg.count },
+          total_orders: { increment: incrementCount },
           last_order_date: agg.maxDate,
           is_followed_up: false,
         },
