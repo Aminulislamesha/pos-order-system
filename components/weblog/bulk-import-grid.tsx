@@ -16,6 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
 
+export interface ProductItem {
+  product: string;
+  quantity: string | number;
+}
+
 export interface GridRow {
   id: string;
   date: string;
@@ -25,13 +30,17 @@ export interface GridRow {
   phone: string;
   addr1: string;
   addr2: string;
-  total_bill: number | string;
+  col1: string;
+  col2: string;
+  col3: string;
+  total_bill: string | number;
+  items: ProductItem[];
 }
 
 const CHUNK_SIZE = 200;
 
-const INITIAL_ROWS: GridRow[] = Array.from({ length: 5 }, (_, i) => ({
-  id: `row-${i + 1}`,
+const createDefaultRow = (id: string): GridRow => ({
+  id,
   date: new Date().toISOString().split("T")[0],
   invoice_id: "",
   note: "",
@@ -39,17 +48,24 @@ const INITIAL_ROWS: GridRow[] = Array.from({ length: 5 }, (_, i) => ({
   phone: "",
   addr1: "",
   addr2: "",
+  col1: "",
+  col2: "",
+  col3: "",
   total_bill: "",
-}));
+  items: [
+    { product: "", quantity: "" },
+    { product: "", quantity: "" },
+    { product: "", quantity: "" },
+  ],
+});
 
-function looksLikePhone(val: string): boolean {
-  if (!val) return false;
-  const c = cleanPhoneNumber(val);
-  return c.startsWith("01") && c.length >= 10;
-}
+const INITIAL_ROWS: GridRow[] = Array.from({ length: 5 }, (_, i) =>
+  createDefaultRow(`row-${i + 1}`)
+);
 
 export function BulkImportGrid() {
   const [rows, setRows] = React.useState<GridRow[]>(INITIAL_ROWS);
+  const [manualItemPairsCount, setManualItemPairsCount] = React.useState<number>(3);
   const [isImporting, setIsImporting] = React.useState(false);
   const [currentChunk, setCurrentChunk] = React.useState(0);
   const [totalChunks, setTotalChunks] = React.useState(0);
@@ -68,7 +84,15 @@ export function BulkImportGrid() {
 
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
+  // Compute maximum number of product-quantity pairs across rows
+  const maxItemPairs = Math.max(
+    manualItemPairsCount,
+    3,
+    ...rows.map((r) => r.items?.length || 0)
+  );
+
   // Parse TSV / CSV text lines into GridRow objects
+  // Sequence: date, invoice, note, name, phone number, address 1, address 2, three empty columns, bill, product, quantity...
   const parseSpreadsheetText = (text: string): GridRow[] => {
     const lines = text
       .split(/\r?\n/)
@@ -94,96 +118,53 @@ export function BulkImportGrid() {
         return;
       }
 
-      let dateVal = "";
-      let invoiceVal = "";
-      let noteVal = "";
-      let nameVal = "";
-      let phoneVal = "";
-      let addr1Val = "";
-      let addr2Val = "";
-      let billVal: string | number = "";
+      const [
+        dateCol = "",
+        invoiceCol = "",
+        noteCol = "",
+        nameCol = "",
+        phoneCol = "",
+        addr1Col = "",
+        addr2Col = "",
+        empty1Col = "",
+        empty2Col = "",
+        empty3Col = "",
+        billCol = "",
+      ] = cols;
 
-      // Check structure:
-      // Pattern A: User's Google Sheet format with 10+ columns:
-      // cols[0]=Date, cols[1]=Invoice, cols[2]=Tag/Note, cols[3]=Name, cols[4]=Phone, cols[5]=Addr1, cols[6]=Addr2, cols[7]=Postal, cols[9]=COD, cols[10]=Bill, cols[11..]=Products
-      if (looksLikePhone(cols[4])) {
-        dateVal = parseDateToYMD(cols[0]);
-        invoiceVal = cols[1] || "";
-        nameVal = cols[3] || "Customer";
-        phoneVal = cleanPhoneNumber(cols[4]);
-        addr1Val = cols[5] || "";
-        addr2Val = cols[6] || "";
-
-        if (cols.length >= 11) {
-          billVal = cols[10] ? cols[10].replace(/[^0-9.]/g, "") : "";
-
-          // Extract products from cols[11..]
-          const productParts: string[] = [];
-          for (let c = 11; c < cols.length; c += 2) {
-            const item = cols[c];
-            if (!item) continue;
-            const qty = cols[c + 1];
-            if (qty && !isNaN(Number(qty))) {
-              productParts.push(`${item} (x${qty})`);
-            } else {
-              productParts.push(item);
-              if (qty) productParts.push(qty);
-            }
-          }
-
-          const notesArr: string[] = [];
-          if (cols[2]) notesArr.push(`[${cols[2]}]`);
-          if (cols[9] && cols[9].toLowerCase().includes("cash on delivery")) {
-            notesArr.push("COD");
-          } else if (cols[9]) {
-            notesArr.push(cols[9]);
-          }
-          if (productParts.length > 0) {
-            notesArr.push(productParts.join(", "));
-          }
-          noteVal = notesArr.join(" ") || cols[2] || "";
-        } else if (cols.length >= 8) {
-          billVal = cols[7] ? cols[7].replace(/[^0-9.]/g, "") : "";
-          noteVal = cols[2] || "";
-        } else {
-          noteVal = cols[2] || "";
-        }
-      } else if (looksLikePhone(cols[3])) {
-        // Pattern B: Date, Invoice, Name, Phone, Addr1, Addr2, Bill, Note
-        dateVal = parseDateToYMD(cols[0]);
-        invoiceVal = cols[1] || "";
-        nameVal = cols[2] || "Customer";
-        phoneVal = cleanPhoneNumber(cols[3]);
-        addr1Val = cols[4] || "";
-        addr2Val = cols[5] || "";
-        billVal = cols[6] ? cols[6].replace(/[^0-9.]/g, "") : "";
-        noteVal = cols[7] || "";
-      } else {
-        // Fallback default mapping: Date, Invoice, Note, Name, Phone, Addr1, Addr2, Bill
-        dateVal = parseDateToYMD(cols[0]);
-        invoiceVal = cols[1] || "";
-        noteVal = cols[2] || "";
-        nameVal = cols[3] || "Customer";
-        phoneVal = cleanPhoneNumber(cols[4] || "");
-        addr1Val = cols[5] || "";
-        addr2Val = cols[6] || "";
-        billVal = cols[7] ? cols[7].replace(/[^0-9.]/g, "") : "";
+      if (!invoiceCol && !nameCol && !phoneCol) {
+        return; // skip blank rows
       }
 
-      if (!invoiceVal && !nameVal && !phoneVal) {
-        return; // skip blank rows
+      // Extract products and quantities starting from column index 11
+      const items: ProductItem[] = [];
+      for (let c = 11; c < cols.length; c += 2) {
+        const prod = cols[c] || "";
+        const qty = cols[c + 1] || "";
+        if (prod || qty) {
+          items.push({ product: prod, quantity: qty });
+        }
+      }
+
+      // Ensure at least 3 item slots are available
+      while (items.length < 3) {
+        items.push({ product: "", quantity: "" });
       }
 
       newRows.push({
         id: `pasted-${Date.now()}-${index}`,
-        date: dateVal || new Date().toISOString().split("T")[0],
-        invoice_id: invoiceVal,
-        note: noteVal,
-        name: nameVal || "Customer",
-        phone: phoneVal,
-        addr1: addr1Val,
-        addr2: addr2Val,
-        total_bill: billVal,
+        date: parseDateToYMD(dateCol),
+        invoice_id: invoiceCol,
+        note: noteCol,
+        name: nameCol || "Customer",
+        phone: cleanPhoneNumber(phoneCol),
+        addr1: addr1Col,
+        addr2: addr2Col,
+        col1: empty1Col,
+        col2: empty2Col,
+        col3: empty3Col,
+        total_bill: billCol ? billCol.replace(/[^0-9.]/g, "") : "",
+        items,
       });
     });
 
@@ -217,10 +198,10 @@ export function BulkImportGrid() {
     }
   };
 
-  // Update a single cell
+  // Update a standard cell
   const handleCellChange = (
     index: number,
-    field: keyof GridRow,
+    field: keyof Omit<GridRow, "items">,
     value: string | number
   ) => {
     const updated = [...rows];
@@ -228,21 +209,32 @@ export function BulkImportGrid() {
     setRows(updated);
   };
 
+  // Update a product or quantity cell
+  const handleItemChange = (
+    rowIndex: number,
+    itemIndex: number,
+    field: "product" | "quantity",
+    value: string
+  ) => {
+    setRows((prev) => {
+      const updated = [...prev];
+      const row = { ...updated[rowIndex] };
+      const items = [...(row.items || [])];
+      while (items.length <= itemIndex) {
+        items.push({ product: "", quantity: "" });
+      }
+      items[itemIndex] = { ...items[itemIndex], [field]: value };
+      row.items = items;
+      updated[rowIndex] = row;
+      return updated;
+    });
+  };
+
   // Add a blank row
   const handleAddRow = () => {
     setRows((prev) => [
       ...prev,
-      {
-        id: `row-${Date.now()}`,
-        date: new Date().toISOString().split("T")[0],
-        invoice_id: "",
-        note: "",
-        name: "",
-        phone: "",
-        addr1: "",
-        addr2: "",
-        total_bill: "",
-      },
+      createDefaultRow(`row-${Date.now()}`),
     ]);
   };
 
@@ -272,6 +264,14 @@ export function BulkImportGrid() {
       "01711000006",
       "01811000007",
     ];
+    const demoProducts = [
+      "Snuggly Palazzo - Coffee, XXL",
+      "Snuggly Palazzo - Black, XXL",
+      "Snuggly Palazzo - Mauve Pink / L",
+      "Flared Leggings - Black / L",
+      "Snuggly Palazzo - Orchid Purple, XXL",
+      "Snuggly Palazzo - Aqua Blue, XXL",
+    ];
 
     for (let i = 1; i <= count; i++) {
       const phoneIndex = i % demoPhones.length;
@@ -281,12 +281,20 @@ export function BulkImportGrid() {
         id: `sample-${i}`,
         date: baseDate.toISOString().split("T")[0],
         invoice_id: `INV-2026-${invNum}`,
-        note: i % 3 === 0 ? "Urgent delivery, call before arrival" : "Standard parcel",
+        note: i % 3 === 0 ? "VU11,WA" : i % 2 === 0 ? "120 paid" : "",
         name: `Customer ${phoneIndex + 1}`,
         phone: phone,
         addr1: `House ${10 + (i % 50)}, Road ${1 + (i % 20)}`,
         addr2: i % 2 === 0 ? "Dhanmondi, Dhaka" : "Gulshan-1, Dhaka",
+        col1: "BD-13",
+        col2: "",
+        col3: "Cash on delivery",
         total_bill: (i % 4 + 1) * 600,
+        items: [
+          { product: demoProducts[i % demoProducts.length], quantity: "1" },
+          { product: demoProducts[(i + 1) % demoProducts.length], quantity: "1" },
+          { product: "", quantity: "" },
+        ],
       });
     }
 
@@ -297,7 +305,6 @@ export function BulkImportGrid() {
 
   // Execute chunked save to serverless API
   const handleSaveBulk = async () => {
-    // Filter only rows that have an invoice_id and phone
     const validRows = rows.filter(
       (r) => r.invoice_id.trim() && r.phone.trim()
     );
@@ -335,10 +342,22 @@ export function BulkImportGrid() {
           `Saving chunk ${i + 1} of ${chunks.length} (${chunks[i].length} rows)...`
         );
 
+        const payload = chunks[i].map((r) => ({
+          date: r.date,
+          invoice_id: r.invoice_id,
+          note: r.note,
+          name: r.name,
+          phone: r.phone,
+          addr1: r.addr1,
+          addr2: r.addr2,
+          total_bill: r.total_bill,
+          items: r.items,
+        }));
+
         const res = await fetch("/api/nn-weblog/orders/bulk-import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: chunks[i] }),
+          body: JSON.stringify({ rows: payload }),
         });
 
         if (!res.ok) {
@@ -391,8 +410,7 @@ export function BulkImportGrid() {
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Paste spreadsheet rows directly (Ctrl+V) from Excel or Google Sheets.
-            Auto-expands on paste and chunks data into 200-row batches to prevent Vercel serverless timeouts.
+            Paste spreadsheet rows directly (Ctrl+V) from Excel or Google Sheets. Columns: Date, Invoice, Note, Name, Phone, Addr1, Addr2, 3 Empty Cols, Bill, and Product/Quantity pairs.
           </p>
         </div>
 
@@ -520,11 +538,22 @@ export function BulkImportGrid() {
             </span>
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-md font-medium">
               <ArrowRightLeft className="h-3 w-3" />
-              <span>Scroll horizontally to view and edit all columns</span>
+              <span>Scroll horizontally to view Notes, Bill, and Product/Quantity columns</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setManualItemPairsCount((prev) => Math.max(prev, maxItemPairs) + 1)
+              }
+              className="h-7 text-xs gap-1"
+            >
+              <Plus className="h-3 w-3" />
+              <span>Add Product Column</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -541,19 +570,32 @@ export function BulkImportGrid() {
         <div className="w-full overflow-x-auto max-h-[620px] overflow-y-auto">
           <table
             onPaste={handleTablePaste}
-            className="min-w-[1450px] w-full border-collapse text-left text-xs"
+            className="min-w-max w-full border-collapse text-left text-xs"
           >
             <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 shadow-sm">
               <tr>
                 <th className="w-12 px-3 py-2.5 text-center font-mono font-semibold text-slate-400">#</th>
                 <th className="w-36 px-3 py-2.5 font-semibold">Date</th>
                 <th className="w-36 px-3 py-2.5 font-semibold">Invoice ID *</th>
+                <th className="w-36 px-3 py-2.5 font-semibold text-amber-700 dark:text-amber-400">Note</th>
                 <th className="w-44 px-3 py-2.5 font-semibold">Customer Name</th>
                 <th className="w-36 px-3 py-2.5 font-semibold">Phone *</th>
-                <th className="w-28 px-3 py-2.5 font-semibold">Total Bill (৳)</th>
                 <th className="w-64 px-3 py-2.5 font-semibold">Address Line 1</th>
-                <th className="w-40 px-3 py-2.5 font-semibold">Address Line 2 / City</th>
-                <th className="min-w-[300px] px-3 py-2.5 font-semibold">Note / Products / Details</th>
+                <th className="w-40 px-3 py-2.5 font-semibold">Address Line 2</th>
+                <th className="w-24 px-2 py-2.5 font-semibold text-slate-400">Empty 1</th>
+                <th className="w-24 px-2 py-2.5 font-semibold text-slate-400">Empty 2</th>
+                <th className="w-28 px-2 py-2.5 font-semibold text-slate-400">Empty 3</th>
+                <th className="w-28 px-3 py-2.5 font-semibold text-emerald-700 dark:text-emerald-400">Bill (৳)</th>
+                {Array.from({ length: maxItemPairs }).map((_, i) => (
+                  <React.Fragment key={`header-item-${i}`}>
+                    <th className="w-56 px-3 py-2.5 font-semibold text-slate-800 dark:text-slate-200 border-l border-slate-200 dark:border-slate-700">
+                      Product {i + 1}
+                    </th>
+                    <th className="w-20 px-2 py-2.5 font-semibold text-slate-800 dark:text-slate-200 text-center">
+                      Qty {i + 1}
+                    </th>
+                  </React.Fragment>
+                ))}
                 <th className="w-12 px-2 py-2.5 text-center font-semibold">Del</th>
               </tr>
             </thead>
@@ -592,6 +634,15 @@ export function BulkImportGrid() {
                     <td className="p-1">
                       <input
                         type="text"
+                        placeholder="Note / Tag"
+                        value={row.note}
+                        onChange={(e) => handleCellChange(idx, "note", e.target.value)}
+                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-amber-800 dark:text-amber-300 font-medium"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
                         placeholder="Customer Name"
                         value={row.name}
                         onChange={(e) => handleCellChange(idx, "name", e.target.value)}
@@ -605,15 +656,6 @@ export function BulkImportGrid() {
                         value={row.phone}
                         onChange={(e) => handleCellChange(idx, "phone", e.target.value)}
                         className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
-                      />
-                    </td>
-                    <td className="p-1">
-                      <input
-                        type="text"
-                        placeholder="1200"
-                        value={row.total_bill ?? ""}
-                        onChange={(e) => handleCellChange(idx, "total_bill", e.target.value)}
-                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200"
                       />
                     </td>
                     <td className="p-1">
@@ -637,12 +679,68 @@ export function BulkImportGrid() {
                     <td className="p-1">
                       <input
                         type="text"
-                        placeholder="Order details / items / notes"
-                        value={row.note}
-                        onChange={(e) => handleCellChange(idx, "note", e.target.value)}
-                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                        placeholder="Empty 1"
+                        value={row.col1}
+                        onChange={(e) => handleCellChange(idx, "col1", e.target.value)}
+                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-slate-400"
                       />
                     </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        placeholder="Empty 2"
+                        value={row.col2}
+                        onChange={(e) => handleCellChange(idx, "col2", e.target.value)}
+                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-slate-400"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        placeholder="Empty 3"
+                        value={row.col3}
+                        onChange={(e) => handleCellChange(idx, "col3", e.target.value)}
+                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-slate-400"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
+                        placeholder="0"
+                        value={row.total_bill ?? ""}
+                        onChange={(e) => handleCellChange(idx, "total_bill", e.target.value)}
+                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200"
+                      />
+                    </td>
+                    {Array.from({ length: maxItemPairs }).map((_, i) => {
+                      const item = row.items?.[i] || { product: "", quantity: "" };
+                      return (
+                        <React.Fragment key={`row-${row.id}-item-${i}`}>
+                          <td className="p-1 border-l border-slate-100 dark:border-slate-800/60">
+                            <input
+                              type="text"
+                              placeholder={`Product ${i + 1}`}
+                              value={item.product || ""}
+                              onChange={(e) =>
+                                handleItemChange(idx, i, "product", e.target.value)
+                              }
+                              className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-slate-900 dark:text-slate-100"
+                            />
+                          </td>
+                          <td className="p-1">
+                            <input
+                              type="text"
+                              placeholder="1"
+                              value={item.quantity || ""}
+                              onChange={(e) =>
+                                handleItemChange(idx, i, "quantity", e.target.value)
+                              }
+                              className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs text-center"
+                            />
+                          </td>
+                        </React.Fragment>
+                      );
+                    })}
                     <td className="p-1 text-center">
                       <button
                         type="button"
@@ -675,14 +773,14 @@ export function BulkImportGrid() {
               Paste Raw TSV or CSV Data
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Directly paste rows from Google Sheets or Excel. Date, Invoice, Name, Phone, Bill, and Items are automatically detected and mapped.
+              Columns sequence: Date, Invoice, Note, Name, Phone, Addr1, Addr2, 3 Empty Columns, Bill, Product, Quantity...
             </p>
 
             <textarea
               rows={12}
               value={rawTextInput}
               onChange={(e) => setRawTextInput(e.target.value)}
-              placeholder="Paste rows directly here...&#10;2026-10-10 19:13	SC53380		Tanzima Nusrat	01675121790	house 1 Road 5...	Dhaka	...	1200	Snuggly Palazzo"
+              placeholder="Paste rows directly here...&#10;2026-10-10 19:13	SC53380		Tanzima Nusrat	01675121790	house 1 Road 5...	Dhaka	BD-13		Cash on delivery	1200	Snuggly Palazzo - Coffee, XXL	1	Snuggly Palazzo - Black, XXL	1"
               className="w-full rounded-xl border border-slate-300 p-3 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
             />
 

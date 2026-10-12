@@ -12,6 +12,7 @@ export interface RawImportRow {
   addr2?: string;
   total_bill?: number | string;
   delivery_charge?: number | string;
+  items?: Array<{ product: string; quantity: string | number }>;
 }
 
 import { ensureWeblogTables } from "@/lib/weblog/init-db";
@@ -78,10 +79,39 @@ export async function POST(request: NextRequest) {
       const totalBill = typeof r.total_bill === "number" ? r.total_bill : parseFloat(r.total_bill || "0") || 0;
       const deliveryCharge = typeof r.delivery_charge === "number" ? r.delivery_charge : parseFloat(r.delivery_charge || "0") || 0;
 
+      // Compile details from note and items
+      const noteStr = (r.note || "").toString().trim();
+      const validItems = Array.isArray(r.items)
+        ? r.items.filter(
+            (it) =>
+              (it.product || "").trim() ||
+              (it.quantity || "").toString().trim()
+          )
+        : [];
+
+      let details = "";
+      if (validItems.length > 0) {
+        const itemsText = validItems
+          .map((it) => {
+            const prod = (it.product || "").trim();
+            const qty = (it.quantity || "").toString().trim();
+            return qty ? `${prod} (x${qty})` : prod;
+          })
+          .join(", ");
+
+        if (noteStr) {
+          details = `[${noteStr}] ${itemsText}`;
+        } else {
+          details = itemsText;
+        }
+      } else {
+        details = noteStr;
+      }
+
       validRows.push({
         date: parsedDate,
         invoice_id: invoice,
-        note: (r.note || "").toString().trim(),
+        note: details,
         name,
         phone,
         address: combinedAddress,
