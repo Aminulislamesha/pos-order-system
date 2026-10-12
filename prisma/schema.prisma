@@ -115,7 +115,7 @@ model Customer {
 
 model Order {
   id                     String            @id @default(uuid())
-  invoice_id             String            @unique
+  invoice_id             String
   customer_id            String
   customer               Customer          @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   date                   DateTime

@@ -92,3 +92,15 @@ export function parseDateToYMD(val: string | null | undefined): string {
 
   return new Date().toISOString().split("T")[0];
 }
+
+export function isExchangeOrResendInvoice(invoiceId: string | null | undefined): boolean {
+  if (!invoiceId) return false;
+  const inv = invoiceId.trim().toLowerCase();
+  return /-(?:\d+|exc|exchange|resend)(?:-(?:\d+|exc|exchange|resend))*$/i.test(inv);
+}
+
+export function getBaseInvoiceId(invoiceId: string | null | undefined): string {
+  if (!invoiceId) return "";
+  const trimmed = invoiceId.trim();
+  return trimmed.replace(/-(?:\d+|exc|exchange|resend)(?:-(?:\d+|exc|exchange|resend))*$/i, "");
+}

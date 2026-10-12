@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
+import {
+  cleanPhoneNumber,
+  parseDateToYMD,
+  getBaseInvoiceId,
+  isExchangeOrResendInvoice,
+} from "@/lib/weblog/utils";
 
 export interface RawImportRow {
   date?: string;
@@ -35,7 +40,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Sanitize & validate incoming rows
+    // 1. Sanitize & validate incoming rows (no skipping of duplicate invoices)
     const validRows: Array<{
       date: Date;
       invoice_id: string;
@@ -47,7 +52,7 @@ export async function POST(request: NextRequest) {
       delivery_charge: number;
     }> = [];
 
-    const seenInvoicesInBatch = new Set<string>();
+    let exchangeOrdersCount = 0;
 
     for (const r of rows) {
       const invoice = (r.invoice_id || "").toString().trim();
@@ -55,14 +60,12 @@ export async function POST(request: NextRequest) {
       const name = (r.name || "").toString().trim() || "Customer";
 
       if (!invoice || !phone) {
-        continue; // Skip invalid rows without invoice or phone
+        continue; // Skip blank rows without invoice or phone
       }
 
-      // Skip duplicate within the same incoming payload batch
-      if (seenInvoicesInBatch.has(invoice)) {
-        continue;
+      if (isExchangeOrResendInvoice(invoice)) {
+        exchangeOrdersCount++;
       }
-      seenInvoicesInBatch.add(invoice);
 
       const ymd = parseDateToYMD(r.date);
       let parsedDate = new Date(`${ymd}T00:00:00.000Z`);
@@ -125,33 +128,16 @@ export async function POST(request: NextRequest) {
         success: true,
         processed: rows.length,
         inserted: 0,
-        skippedDuplicates: rows.length,
-        message: "No new or valid rows to import.",
+        exchangeOrders: 0,
+        newCustomersCreated: 0,
+        existingCustomersLinked: 0,
+        message: "No valid rows to import.",
       });
     }
 
-    // 2. Prevent duplicate invoice_id insertion:
-    const incomingInvoices = validRows.map((r) => r.invoice_id);
-    const existingOrders = await prisma.order.findMany({
-      where: { invoice_id: { in: incomingInvoices } },
-      select: { invoice_id: true },
-    });
-    const existingInvoiceSet = new Set(existingOrders.map((o) => o.invoice_id));
+    const rowsToProcess = validRows;
 
-    const rowsToProcess = validRows.filter((r) => !existingInvoiceSet.has(r.invoice_id));
-    const duplicateInvoiceCount = validRows.length - rowsToProcess.length + (rows.length - validRows.length);
-
-    if (rowsToProcess.length === 0) {
-      return NextResponse.json({
-        success: true,
-        processed: rows.length,
-        inserted: 0,
-        skippedDuplicates: duplicateInvoiceCount,
-        message: "All invoice IDs in this chunk already exist in the database.",
-      });
-    }
-
-    // 3. Deduplicate customers based on Phone Number
+    // 2. Deduplicate customers based on Phone Number
     const uniquePhones = Array.from(new Set(rowsToProcess.map((r) => r.phone)));
 
     const existingCustomers = await prisma.customer.findMany({
@@ -193,6 +179,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 3. Base Invoice Tracking:
+    // Suffixes like -1, -2, -3, -exc or repeat rows of same base invoice do NOT count as repeat orders!
+    const allCustomerIds = Array.from(customerMap.values()).map((c) => c.id);
+    const existingCustomerOrders = await prisma.order.findMany({
+      where: { customer_id: { in: allCustomerIds } },
+      select: { customer_id: true, invoice_id: true },
+    });
+
+    const customerKnownBases = new Map<string, Set<string>>();
+    for (const o of existingCustomerOrders) {
+      if (!customerKnownBases.has(o.customer_id)) {
+        customerKnownBases.set(o.customer_id, new Set());
+      }
+      const base = getBaseInvoiceId(o.invoice_id);
+      if (base) {
+        customerKnownBases.get(o.customer_id)!.add(base);
+      }
+    }
+
     // 4. Prepare orders and customer update aggregations
     const ordersData: Array<{
       invoice_id: string;
@@ -222,22 +227,40 @@ export async function POST(request: NextRequest) {
         status: "pending",
       });
 
-      // Track order additions per customer
+      const baseInv = getBaseInvoiceId(r.invoice_id);
+      const isExchange = isExchangeOrResendInvoice(r.invoice_id);
+
+      if (!customerKnownBases.has(customer.id)) {
+        customerKnownBases.set(customer.id, new Set());
+      }
+      const knownBases = customerKnownBases.get(customer.id)!;
+
+      // Only count as a new base order if it is NOT an exchange AND its base invoice was not already counted
+      let isNewBaseOrder = false;
+      if (!isExchange && baseInv && !knownBases.has(baseInv)) {
+        isNewBaseOrder = true;
+        knownBases.add(baseInv);
+      }
+
       const existingAgg = customerOrderCounts.get(customer.id);
       if (!existingAgg) {
-        customerOrderCounts.set(customer.id, { count: 1, maxDate: r.date });
+        customerOrderCounts.set(customer.id, {
+          count: isNewBaseOrder ? 1 : 0,
+          maxDate: r.date,
+        });
       } else {
-        existingAgg.count += 1;
+        if (isNewBaseOrder) {
+          existingAgg.count += 1;
+        }
         if (r.date > existingAgg.maxDate) {
           existingAgg.maxDate = r.date;
         }
       }
     }
 
-    // 5. Bulk insert orders
+    // 5. Bulk insert all orders (without skipping any duplicate invoice)
     await prisma.order.createMany({
       data: ordersData,
-      skipDuplicates: true,
     });
 
     // 6. Update customer total_orders and last_order_date
@@ -247,7 +270,7 @@ export async function POST(request: NextRequest) {
         data: {
           total_orders: { increment: agg.count },
           last_order_date: agg.maxDate,
-          is_followed_up: false, // Reset follow up flag when a new order is placed
+          is_followed_up: false,
         },
       });
     });
@@ -258,7 +281,7 @@ export async function POST(request: NextRequest) {
       success: true,
       processed: rows.length,
       inserted: ordersData.length,
-      skippedDuplicates: duplicateInvoiceCount,
+      exchangeOrders: exchangeOrdersCount,
       newCustomersCreated: newCustomersToCreate.length,
       existingCustomersLinked: rowsToProcess.length - newCustomersToCreate.length,
     });

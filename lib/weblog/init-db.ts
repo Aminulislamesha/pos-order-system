@@ -50,7 +50,9 @@ export async function ensureWeblogTables() {
       `);
 
       await prisma.$executeRawUnsafe(`
-        CREATE UNIQUE INDEX IF NOT EXISTS "Order_invoice_id_key" ON "Order"("invoice_id");
+        ALTER TABLE "Order" DROP CONSTRAINT IF EXISTS "Order_invoice_id_key";
+        DROP INDEX IF EXISTS "Order_invoice_id_key";
+        CREATE INDEX IF NOT EXISTS "Order_invoice_id_idx" ON "Order"("invoice_id");
         CREATE INDEX IF NOT EXISTS "Order_customer_id_idx" ON "Order"("customer_id");
         CREATE INDEX IF NOT EXISTS "Order_status_idx" ON "Order"("status");
         CREATE INDEX IF NOT EXISTS "Order_date_idx" ON "Order"("date");

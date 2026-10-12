@@ -78,7 +78,7 @@ export function BulkImportGrid() {
   const [stats, setStats] = React.useState<{
     processed: number;
     inserted: number;
-    skippedDuplicates: number;
+    exchangeOrders: number;
     newCustomersCreated: number;
     existingCustomersLinked: number;
   } | null>(null);
@@ -331,7 +331,7 @@ export function BulkImportGrid() {
     let accumulatedStats = {
       processed: 0,
       inserted: 0,
-      skippedDuplicates: 0,
+      exchangeOrders: 0,
       newCustomersCreated: 0,
       existingCustomersLinked: 0,
     };
@@ -372,8 +372,8 @@ export function BulkImportGrid() {
         accumulatedStats = {
           processed: accumulatedStats.processed + (data.processed || 0),
           inserted: accumulatedStats.inserted + (data.inserted || 0),
-          skippedDuplicates:
-            accumulatedStats.skippedDuplicates + (data.skippedDuplicates || 0),
+          exchangeOrders:
+            accumulatedStats.exchangeOrders + (data.exchangeOrders || 0),
           newCustomersCreated:
             accumulatedStats.newCustomersCreated + (data.newCustomersCreated || 0),
           existingCustomersLinked:
@@ -514,9 +514,9 @@ export function BulkImportGrid() {
               </div>
             </div>
             <div className="rounded-xl bg-white p-3.5 shadow-sm border border-emerald-100 dark:bg-slate-900 dark:border-slate-800">
-              <div className="text-xs text-slate-500">Duplicate Invoices Skipped</div>
+              <div className="text-xs text-slate-500">Exchanges / Resends Linked</div>
               <div className="text-2xl font-bold text-amber-600">
-                {stats.skippedDuplicates.toLocaleString()}
+                {stats.exchangeOrders.toLocaleString()}
               </div>
             </div>
             <div className="rounded-xl bg-white p-3.5 shadow-sm border border-emerald-100 dark:bg-slate-900 dark:border-slate-800">

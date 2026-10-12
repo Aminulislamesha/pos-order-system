@@ -64,6 +64,8 @@ export function verifySteadfastSignature(
   }
 }
 
+import { getBaseInvoiceId } from "@/lib/weblog/utils";
+
 export async function fetchSteadfastStatusByInvoice(invoiceId: string): Promise<{
   success: boolean;
   status?: string;
@@ -84,50 +86,70 @@ export async function fetchSteadfastStatusByInvoice(invoiceId: string): Promise<
     };
   }
 
-  try {
-    const endpoint = `https://portal.steadfast.com.bd/api/v1/status_by_invoice/${encodeURIComponent(
-      invoiceId
-    )}`;
-
-    const response = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-        "Api-Key": apiKey,
-        "Secret-Key": secretKey,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return {
-        success: false,
-        error: `Steadfast API error ${response.status}: ${errText}`,
-      };
-    }
-
-    const data: SteadfastStatusResponse = await response.json();
-    const rawStatus =
-      data.delivery_status ||
-      data.consignment?.status ||
-      (typeof data.status === "string" ? data.status : undefined);
-
-    const trackingCode = data.consignment?.tracking_code;
-    const consignmentId = data.consignment?.consignment_id?.toString();
-
-    return {
-      success: true,
-      status: normalizeSteadfastStatus(rawStatus),
-      trackingCode,
-      consignmentId,
-      raw: data,
-    };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "Network error contacting Steadfast API";
-    return {
-      success: false,
-      error: errorMsg,
-    };
+  const trimmedInvoice = invoiceId.trim();
+  const invoiceCandidates = [trimmedInvoice];
+  const baseInv = getBaseInvoiceId(trimmedInvoice);
+  if (baseInv && baseInv !== trimmedInvoice) {
+    invoiceCandidates.push(baseInv);
   }
+
+  // Real live working Packzy / Steadfast endpoints
+  const hosts = [
+    "https://portal.packzy.com",
+    "https://portal.steadfast.com.bd",
+  ];
+
+  let lastError = "Unable to connect to Packzy / Steadfast Courier API";
+
+  for (const inv of invoiceCandidates) {
+    for (const host of hosts) {
+      try {
+        const endpoint = `${host}/api/v1/status_by_invoice/${encodeURIComponent(inv)}`;
+        const response = await fetch(endpoint, {
+          method: "GET",
+          headers: {
+            "Api-Key": apiKey,
+            "Secret-Key": secretKey,
+            "Content-Type": "application/json",
+          },
+          signal: AbortSignal.timeout(8000),
+        });
+
+        if (response.status === 404) {
+          // Parcel not found under this invoice variant, try base variant
+          continue;
+        }
+
+        if (!response.ok) {
+          const errText = await response.text();
+          lastError = `Courier API error (${response.status}): ${errText}`;
+          continue;
+        }
+
+        const data: SteadfastStatusResponse = await response.json();
+        const rawStatus =
+          data.delivery_status ||
+          data.consignment?.status ||
+          (typeof data.status === "string" ? data.status : undefined);
+
+        const trackingCode = data.consignment?.tracking_code;
+        const consignmentId = data.consignment?.consignment_id?.toString();
+
+        return {
+          success: true,
+          status: normalizeSteadfastStatus(rawStatus),
+          trackingCode,
+          consignmentId,
+          raw: data,
+        };
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : "Network error contacting Steadfast API";
+      }
+    }
+  }
+
+  return {
+    success: false,
+    error: lastError,
+  };
 }

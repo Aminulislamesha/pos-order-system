@@ -87,8 +87,9 @@ export async function POST(request: NextRequest) {
 
     // Lookup order
     await ensureWeblogTables();
-    const order = await prisma.order.findUnique({
+    const order = await prisma.order.findFirst({
       where: { invoice_id: invoiceId },
+      orderBy: { date: "desc" },
     });
 
     if (!order) {
