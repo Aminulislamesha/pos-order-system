@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cleanPhoneNumber } from "@/lib/weblog/utils";
+import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
 
 export interface RawImportRow {
   date?: string;
@@ -63,7 +63,8 @@ export async function POST(request: NextRequest) {
       }
       seenInvoicesInBatch.add(invoice);
 
-      let parsedDate = new Date(r.date || Date.now());
+      const ymd = parseDateToYMD(r.date);
+      let parsedDate = new Date(`${ymd}T00:00:00.000Z`);
       if (isNaN(parsedDate.getTime())) {
         parsedDate = new Date();
       }

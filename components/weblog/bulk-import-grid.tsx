@@ -10,10 +10,11 @@ import {
   Plus,
   Database,
   Sparkles,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { cleanPhoneNumber } from "@/lib/weblog/utils";
+import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
 
 export interface GridRow {
   id: string;
@@ -24,6 +25,7 @@ export interface GridRow {
   phone: string;
   addr1: string;
   addr2: string;
+  total_bill: number | string;
 }
 
 const CHUNK_SIZE = 200;
@@ -37,7 +39,14 @@ const INITIAL_ROWS: GridRow[] = Array.from({ length: 5 }, (_, i) => ({
   phone: "",
   addr1: "",
   addr2: "",
+  total_bill: "",
 }));
+
+function looksLikePhone(val: string): boolean {
+  if (!val) return false;
+  const c = cleanPhoneNumber(val);
+  return c.startsWith("01") && c.length >= 10;
+}
 
 export function BulkImportGrid() {
   const [rows, setRows] = React.useState<GridRow[]>(INITIAL_ROWS);
@@ -85,30 +94,96 @@ export function BulkImportGrid() {
         return;
       }
 
-      // Expected columns: Date, Invoice ID, Note, Name, Phone, Addr1, Addr2
-      const [
-        dateCol = "",
-        invoiceCol = "",
-        noteCol = "",
-        nameCol = "",
-        phoneCol = "",
-        addr1Col = "",
-        addr2Col = "",
-      ] = cols;
+      let dateVal = "";
+      let invoiceVal = "";
+      let noteVal = "";
+      let nameVal = "";
+      let phoneVal = "";
+      let addr1Val = "";
+      let addr2Val = "";
+      let billVal: string | number = "";
 
-      if (!invoiceCol && !nameCol && !phoneCol) {
+      // Check structure:
+      // Pattern A: User's Google Sheet format with 10+ columns:
+      // cols[0]=Date, cols[1]=Invoice, cols[2]=Tag/Note, cols[3]=Name, cols[4]=Phone, cols[5]=Addr1, cols[6]=Addr2, cols[7]=Postal, cols[9]=COD, cols[10]=Bill, cols[11..]=Products
+      if (looksLikePhone(cols[4])) {
+        dateVal = parseDateToYMD(cols[0]);
+        invoiceVal = cols[1] || "";
+        nameVal = cols[3] || "Customer";
+        phoneVal = cleanPhoneNumber(cols[4]);
+        addr1Val = cols[5] || "";
+        addr2Val = cols[6] || "";
+
+        if (cols.length >= 11) {
+          billVal = cols[10] ? cols[10].replace(/[^0-9.]/g, "") : "";
+
+          // Extract products from cols[11..]
+          const productParts: string[] = [];
+          for (let c = 11; c < cols.length; c += 2) {
+            const item = cols[c];
+            if (!item) continue;
+            const qty = cols[c + 1];
+            if (qty && !isNaN(Number(qty))) {
+              productParts.push(`${item} (x${qty})`);
+            } else {
+              productParts.push(item);
+              if (qty) productParts.push(qty);
+            }
+          }
+
+          const notesArr: string[] = [];
+          if (cols[2]) notesArr.push(`[${cols[2]}]`);
+          if (cols[9] && cols[9].toLowerCase().includes("cash on delivery")) {
+            notesArr.push("COD");
+          } else if (cols[9]) {
+            notesArr.push(cols[9]);
+          }
+          if (productParts.length > 0) {
+            notesArr.push(productParts.join(", "));
+          }
+          noteVal = notesArr.join(" ") || cols[2] || "";
+        } else if (cols.length >= 8) {
+          billVal = cols[7] ? cols[7].replace(/[^0-9.]/g, "") : "";
+          noteVal = cols[2] || "";
+        } else {
+          noteVal = cols[2] || "";
+        }
+      } else if (looksLikePhone(cols[3])) {
+        // Pattern B: Date, Invoice, Name, Phone, Addr1, Addr2, Bill, Note
+        dateVal = parseDateToYMD(cols[0]);
+        invoiceVal = cols[1] || "";
+        nameVal = cols[2] || "Customer";
+        phoneVal = cleanPhoneNumber(cols[3]);
+        addr1Val = cols[4] || "";
+        addr2Val = cols[5] || "";
+        billVal = cols[6] ? cols[6].replace(/[^0-9.]/g, "") : "";
+        noteVal = cols[7] || "";
+      } else {
+        // Fallback default mapping: Date, Invoice, Note, Name, Phone, Addr1, Addr2, Bill
+        dateVal = parseDateToYMD(cols[0]);
+        invoiceVal = cols[1] || "";
+        noteVal = cols[2] || "";
+        nameVal = cols[3] || "Customer";
+        phoneVal = cleanPhoneNumber(cols[4] || "");
+        addr1Val = cols[5] || "";
+        addr2Val = cols[6] || "";
+        billVal = cols[7] ? cols[7].replace(/[^0-9.]/g, "") : "";
+      }
+
+      if (!invoiceVal && !nameVal && !phoneVal) {
         return; // skip blank rows
       }
 
       newRows.push({
         id: `pasted-${Date.now()}-${index}`,
-        date: dateCol || new Date().toISOString().split("T")[0],
-        invoice_id: invoiceCol,
-        note: noteCol,
-        name: nameCol || "Customer",
-        phone: cleanPhoneNumber(phoneCol),
-        addr1: addr1Col,
-        addr2: addr2Col,
+        date: dateVal || new Date().toISOString().split("T")[0],
+        invoice_id: invoiceVal,
+        note: noteVal,
+        name: nameVal || "Customer",
+        phone: phoneVal,
+        addr1: addr1Val,
+        addr2: addr2Val,
+        total_bill: billVal,
       });
     });
 
@@ -146,7 +221,7 @@ export function BulkImportGrid() {
   const handleCellChange = (
     index: number,
     field: keyof GridRow,
-    value: string
+    value: string | number
   ) => {
     const updated = [...rows];
     updated[index] = { ...updated[index], [field]: value };
@@ -166,8 +241,14 @@ export function BulkImportGrid() {
         phone: "",
         addr1: "",
         addr2: "",
+        total_bill: "",
       },
     ]);
+  };
+
+  // Delete a specific row
+  const handleDeleteRow = (index: number) => {
+    setRows((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Clear all rows
@@ -205,6 +286,7 @@ export function BulkImportGrid() {
         phone: phone,
         addr1: `House ${10 + (i % 50)}, Road ${1 + (i % 20)}`,
         addr2: i % 2 === 0 ? "Dhanmondi, Dhaka" : "Gulshan-1, Dhaka",
+        total_bill: (i % 4 + 1) * 600,
       });
     }
 
@@ -436,9 +518,10 @@ export function BulkImportGrid() {
             <span className="font-mono text-xs font-semibold uppercase tracking-wider text-slate-500">
               Spreadsheet Grid ({rows.length.toLocaleString()} rows)
             </span>
-            <span className="text-xs text-slate-400">
-              Tip: Click any cell or table area and press Ctrl+V to paste spreadsheet data
-            </span>
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-md font-medium">
+              <ArrowRightLeft className="h-3 w-3" />
+              <span>Scroll horizontally to view and edit all columns</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -454,21 +537,24 @@ export function BulkImportGrid() {
           </div>
         </div>
 
-        <div className="max-h-[600px] overflow-auto">
+        {/* Scrollable Container with overflow-x-auto */}
+        <div className="w-full overflow-x-auto max-h-[620px] overflow-y-auto">
           <table
             onPaste={handleTablePaste}
-            className="w-full border-collapse text-left text-xs"
+            className="min-w-[1450px] w-full border-collapse text-left text-xs"
           >
-            <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700">
+            <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 shadow-sm">
               <tr>
                 <th className="w-12 px-3 py-2.5 text-center font-mono font-semibold text-slate-400">#</th>
-                <th className="w-32 px-3 py-2.5 font-semibold">Date</th>
-                <th className="w-40 px-3 py-2.5 font-semibold">Invoice ID *</th>
+                <th className="w-36 px-3 py-2.5 font-semibold">Date</th>
+                <th className="w-36 px-3 py-2.5 font-semibold">Invoice ID *</th>
                 <th className="w-44 px-3 py-2.5 font-semibold">Customer Name</th>
-                <th className="w-40 px-3 py-2.5 font-semibold">Phone *</th>
-                <th className="w-56 px-3 py-2.5 font-semibold">Address Line 1</th>
-                <th className="w-44 px-3 py-2.5 font-semibold">Address Line 2</th>
-                <th className="px-3 py-2.5 font-semibold">Note / Details</th>
+                <th className="w-36 px-3 py-2.5 font-semibold">Phone *</th>
+                <th className="w-28 px-3 py-2.5 font-semibold">Total Bill (৳)</th>
+                <th className="w-64 px-3 py-2.5 font-semibold">Address Line 1</th>
+                <th className="w-40 px-3 py-2.5 font-semibold">Address Line 2 / City</th>
+                <th className="min-w-[300px] px-3 py-2.5 font-semibold">Note / Products / Details</th>
+                <th className="w-12 px-2 py-2.5 text-center font-semibold">Del</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -495,7 +581,7 @@ export function BulkImportGrid() {
                     <td className="p-1">
                       <input
                         type="text"
-                        placeholder="e.g. INV-1001"
+                        placeholder="e.g. SC53380"
                         value={row.invoice_id}
                         onChange={(e) =>
                           handleCellChange(idx, "invoice_id", e.target.value)
@@ -524,6 +610,15 @@ export function BulkImportGrid() {
                     <td className="p-1">
                       <input
                         type="text"
+                        placeholder="1200"
+                        value={row.total_bill ?? ""}
+                        onChange={(e) => handleCellChange(idx, "total_bill", e.target.value)}
+                        className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="text"
                         placeholder="House, Road, Area"
                         value={row.addr1}
                         onChange={(e) => handleCellChange(idx, "addr1", e.target.value)}
@@ -542,11 +637,21 @@ export function BulkImportGrid() {
                     <td className="p-1">
                       <input
                         type="text"
-                        placeholder="Order details / notes"
+                        placeholder="Order details / items / notes"
                         value={row.note}
                         onChange={(e) => handleCellChange(idx, "note", e.target.value)}
                         className="w-full rounded px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                       />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRow(idx)}
+                        title="Remove row"
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -570,15 +675,14 @@ export function BulkImportGrid() {
               Paste Raw TSV or CSV Data
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Columns order: Date, Invoice ID, Note, Name, Phone, Addr1, Addr2.
-              Tabs or commas will be automatically recognized.
+              Directly paste rows from Google Sheets or Excel. Date, Invoice, Name, Phone, Bill, and Items are automatically detected and mapped.
             </p>
 
             <textarea
               rows={12}
               value={rawTextInput}
               onChange={(e) => setRawTextInput(e.target.value)}
-              placeholder="Paste rows directly here...&#10;2026-10-11	INV-1001	Express	Rahim Khan	01711000001	H-12, R-4	Dhaka"
+              placeholder="Paste rows directly here...&#10;2026-10-10 19:13	SC53380		Tanzima Nusrat	01675121790	house 1 Road 5...	Dhaka	...	1200	Snuggly Palazzo"
               className="w-full rounded-xl border border-slate-300 p-3 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
             />
 
@@ -603,3 +707,4 @@ export function BulkImportGrid() {
     </div>
   );
 }
+
