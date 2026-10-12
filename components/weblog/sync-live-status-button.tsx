@@ -37,25 +37,20 @@ export function SyncLiveStatusButton({
   const [syncMode, setSyncMode] = React.useState<"page" | "all" | null>(null);
 
   // Live statistics
-  const [totalInitialPending, setTotalInitialPending] = React.useState(pendingCount);
   const [processedCount, setProcessedCount] = React.useState(0);
   const [updatedCount, setUpdatedCount] = React.useState(0);
   const [deliveredCount, setDeliveredCount] = React.useState(0);
   const [inTransitCount, setInTransitCount] = React.useState(0);
   const [cancelledCount, setCancelledCount] = React.useState(0);
-  const [remainingPending, setRemainingPending] = React.useState(pendingCount);
+  const [syncedRemaining, setSyncedRemaining] = React.useState<number | null>(null);
   const [currentBatchMessage, setCurrentBatchMessage] = React.useState<string>("");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
+  const remainingPending = syncedRemaining !== null ? syncedRemaining : pendingCount;
+  const totalInitialPending = pendingCount;
+
   // Auto-sync preference
-  const [autoSyncEnabled, setAutoSyncEnabled] = React.useState(false);
-
-  const stopRequestedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    setTotalInitialPending(pendingCount);
-    setRemainingPending(pendingCount);
-  }, [pendingCount]);
+  const [autoSyncEnabled, setAutoSyncEnabled] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     try {
@@ -64,9 +59,11 @@ export function SyncLiveStatusButton({
         setAutoSyncEnabled(true);
       }
     } catch {
-      // Ignore localStorage errors
+      // Ignore
     }
   }, []);
+
+  const stopRequestedRef = React.useRef(false);
 
   const toggleAutoSync = (enabled: boolean) => {
     setAutoSyncEnabled(enabled);
@@ -77,22 +74,7 @@ export function SyncLiveStatusButton({
     }
   };
 
-  // Optional background auto-sync on mount if enabled
-  React.useEffect(() => {
-    if (
-      autoSyncEnabled &&
-      currentPageOrderIds.length > 0 &&
-      pendingCount > 0 &&
-      !isRunning &&
-      !isFinished
-    ) {
-      // Silently sync current page orders in the background
-      handleSyncCurrentPage(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSyncEnabled]);
-
-  const resetStats = () => {
+  const resetStats = React.useCallback(() => {
     setProcessedCount(0);
     setUpdatedCount(0);
     setDeliveredCount(0);
@@ -102,72 +84,92 @@ export function SyncLiveStatusButton({
     setErrorMessage(null);
     setCurrentBatchMessage("");
     stopRequestedRef.current = false;
-  };
+  }, []);
 
-  const handleSyncCurrentPage = async (silent = false) => {
-    if (currentPageOrderIds.length === 0) {
-      setErrorMessage("No orders visible on the current page to sync.");
-      return;
-    }
-
-    if (!silent) {
-      resetStats();
-      setIsRunning(true);
-      setSyncMode("page");
-      setCurrentBatchMessage(`Syncing ${currentPageOrderIds.length} orders on this page...`);
-    }
-
-    try {
-      const res = await fetch("/api/nn-weblog/orders/sync-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderIds: currentPageOrderIds,
-          limit: currentPageOrderIds.length,
-          onlyPending: false,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Sync request failed (${res.status})`);
+  const handleSyncCurrentPage = React.useCallback(
+    async (silent = false) => {
+      if (currentPageOrderIds.length === 0) {
+        if (!silent) {
+          setErrorMessage("No orders visible on the current page to sync.");
+        }
+        return;
       }
 
-      const data = await res.json();
       if (!silent) {
-        setProcessedCount(data.processed || currentPageOrderIds.length);
-        setUpdatedCount(data.updated || 0);
+        resetStats();
+        setIsRunning(true);
+        setSyncMode("page");
+        setCurrentBatchMessage(`Syncing ${currentPageOrderIds.length} orders on this page...`);
+      }
 
-        if (Array.isArray(data.results)) {
-          let del = 0, trans = 0, canc = 0;
-          for (const r of data.results) {
-            if (r.newStatus === "delivered") del++;
-            else if (r.newStatus === "in_transit") trans++;
-            else if (r.newStatus === "cancelled") canc++;
+      try {
+        const res = await fetch("/api/nn-weblog/orders/sync-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderIds: currentPageOrderIds,
+            limit: currentPageOrderIds.length,
+            onlyPending: false,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Sync request failed (${res.status})`);
+        }
+
+        const data = await res.json();
+        if (!silent) {
+          setProcessedCount(data.processed || currentPageOrderIds.length);
+          setUpdatedCount(data.updated || 0);
+
+          if (Array.isArray(data.results)) {
+            let del = 0,
+              trans = 0,
+              canc = 0;
+            for (const r of data.results) {
+              if (r.newStatus === "delivered") del++;
+              else if (r.newStatus === "in_transit") trans++;
+              else if (r.newStatus === "cancelled") canc++;
+            }
+            setDeliveredCount(del);
+            setInTransitCount(trans);
+            setCancelledCount(canc);
           }
-          setDeliveredCount(del);
-          setInTransitCount(trans);
-          setCancelledCount(canc);
+
+          if (typeof data.remainingPending === "number") {
+            setSyncedRemaining(data.remainingPending);
+          }
+
+          setIsFinished(true);
+          setCurrentBatchMessage("Page sync complete!");
         }
 
-        if (typeof data.remainingPending === "number") {
-          setRemainingPending(data.remainingPending);
+        router.refresh();
+      } catch (err) {
+        if (!silent) {
+          setErrorMessage(err instanceof Error ? err.message : "Error syncing page orders.");
         }
+      } finally {
+        if (!silent) {
+          setIsRunning(false);
+        }
+      }
+    },
+    [currentPageOrderIds, resetStats, router]
+  );
 
-        setIsFinished(true);
-        setCurrentBatchMessage("Page sync complete!");
-      }
-
-      router.refresh();
-    } catch (err) {
-      if (!silent) {
-        setErrorMessage(err instanceof Error ? err.message : "Error syncing page orders.");
-      }
-    } finally {
-      if (!silent) {
-        setIsRunning(false);
-      }
+  // Optional background auto-sync on mount if enabled
+  React.useEffect(() => {
+    if (
+      autoSyncEnabled &&
+      currentPageOrderIds.length > 0 &&
+      pendingCount > 0 &&
+      !isRunning &&
+      !isFinished
+    ) {
+      handleSyncCurrentPage(true);
     }
-  };
+  }, [autoSyncEnabled, currentPageOrderIds, pendingCount, isRunning, isFinished, handleSyncCurrentPage]);
 
   const handleSyncAllPending = async () => {
     resetStats();
@@ -225,7 +227,7 @@ export function SyncLiveStatusButton({
         setCancelledCount(cancelledAccum);
 
         if (typeof data.remainingPending === "number") {
-          setRemainingPending(data.remainingPending);
+          setSyncedRemaining(data.remainingPending);
           if (data.remainingPending === 0) {
             break;
           }

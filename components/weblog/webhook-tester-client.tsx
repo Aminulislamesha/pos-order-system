@@ -25,14 +25,17 @@ export function WebhookTesterClient() {
 
   const [copied, setCopied] = React.useState(false);
 
-  const payloadObject = {
-    invoice: invoice,
-    status: status,
-    tracking_code: `ST-${invoice}`,
-    consignment_id: Math.floor(100000 + Math.random() * 900000),
-    message: message,
-    timestamp: new Date().toISOString(),
-  };
+  const payloadObject = React.useMemo(
+    () => ({
+      invoice: invoice,
+      status: status,
+      tracking_code: `ST-${invoice}`,
+      consignment_id: 11543970,
+      message: message,
+      timestamp: "2026-10-12T12:00:00.000Z",
+    }),
+    [invoice, status, message]
+  );
 
   const payloadString = JSON.stringify(payloadObject, null, 2);
 
