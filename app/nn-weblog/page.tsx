@@ -52,17 +52,8 @@ export default async function DashboardPage() {
     const repeatThreshold = new Date();
     repeatThreshold.setDate(repeatThreshold.getDate() - repeatDays);
 
-    // Parallel database metrics aggregation
-    const [
-      ordersCount,
-      deliveredCount,
-      cancelledCount,
-      pendingOrdersCount,
-      revenueAgg,
-      followUpsCount,
-      repeatCount,
-      ordersList,
-    ] = await Promise.all([
+    // Resilient database metrics aggregation using allSettled
+    const results = await Promise.allSettled([
       prisma.order.count(),
       prisma.order.count({ where: { status: "delivered" } }),
       prisma.order.count({ where: { status: "cancelled" } }),
@@ -89,14 +80,19 @@ export default async function DashboardPage() {
       }),
     ]);
 
-    totalOrders = ordersCount;
-    deliveredOrders = deliveredCount;
-    cancelledOrders = cancelledCount;
-    pendingCount = pendingOrdersCount;
-    totalRevenue = revenueAgg._sum.total_bill || 0;
-    pendingFollowUpsCount = followUpsCount;
-    repeatCustomersCount = repeatCount;
-    recentOrders = ordersList;
+    if (results[0].status === "fulfilled") totalOrders = results[0].value;
+    if (results[1].status === "fulfilled") deliveredOrders = results[1].value;
+    if (results[2].status === "fulfilled") cancelledOrders = results[2].value;
+    if (results[3].status === "fulfilled") pendingCount = results[3].value;
+    if (results[4].status === "fulfilled") totalRevenue = results[4].value._sum.total_bill || 0;
+    if (results[5].status === "fulfilled") pendingFollowUpsCount = results[5].value;
+    if (results[6].status === "fulfilled") repeatCustomersCount = results[6].value;
+    if (results[7].status === "fulfilled") recentOrders = results[7].value;
+
+    // Fallback if count query had transient issue but orders exist
+    if (totalOrders === 0 && recentOrders.length > 0) {
+      totalOrders = recentOrders.length;
+    }
   } catch (err) {
     console.error("Dashboard database query error:", err);
   }

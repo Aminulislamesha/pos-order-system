@@ -1,12 +1,25 @@
 import { prisma } from "@/lib/prisma";
 
+const globalForInit = globalThis as unknown as {
+  weblogTablesInitialized?: boolean;
+};
+
 let initPromise: Promise<void> | null = null;
 
 export async function ensureWeblogTables() {
+  if (globalForInit.weblogTablesInitialized) return;
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
     try {
+      // Check if tables already exist to skip heavy DDL
+      try {
+        await prisma.$queryRawUnsafe(`SELECT 1 FROM "Order" LIMIT 1;`);
+        globalForInit.weblogTablesInitialized = true;
+        return;
+      } catch {
+        // Table doesn't exist yet, proceed with creation
+      }
       await prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "Customer" (
           "id" TEXT NOT NULL,
@@ -141,6 +154,7 @@ export async function ensureWeblogTables() {
         ) sub
         WHERE c.id = sub.customer_id AND c.total_orders = 0;
       `);
+      globalForInit.weblogTablesInitialized = true;
     } catch (e) {
       console.error("Error creating weblog tables in database:", e);
     }

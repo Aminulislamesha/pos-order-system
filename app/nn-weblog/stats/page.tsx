@@ -17,8 +17,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/weblog/utils";
-import { calculateWeblogStats } from "@/lib/weblog/stats-calculator";
+import { calculateWeblogStats, StatsResult } from "@/lib/weblog/stats-calculator";
 import { ensureWeblogTables } from "@/lib/weblog/init-db";
+import { StatsProductFilter } from "@/components/weblog/stats-product-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -66,25 +67,36 @@ export default async function StatisticsPage({ searchParams }: StatsPageProps) {
     if (customTo) toDate = new Date(`${customTo}T23:59:59.999Z`);
   }
 
-  const [stats, baseProducts] = await Promise.all([
-    calculateWeblogStats({
-      fromDate,
-      toDate,
-      selectedBaseProduct: selectedProduct || null,
-    }),
-    prisma.baseProduct.findMany({
-      select: { name: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  let stats: StatsResult | null = null;
+  let baseProducts: Array<{ name: string }> = [];
+  let loadError: string | null = null;
+
+  try {
+    const [fetchedStats, fetchedBases] = await Promise.all([
+      calculateWeblogStats({
+        fromDate,
+        toDate,
+        selectedBaseProduct: selectedProduct || null,
+      }),
+      prisma.baseProduct.findMany({
+        select: { name: true },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+    stats = fetchedStats;
+    baseProducts = fetchedBases;
+  } catch (err: any) {
+    console.error("Failed to load weblog stats:", err);
+    loadError = err?.message || "Failed to calculate product and sales statistics.";
+  }
 
   const deliverySuccessRate =
-    stats.totalOrders > 0
+    stats && stats.totalOrders > 0
       ? Math.round((stats.deliveredCount / stats.totalOrders) * 100)
       : 0;
 
   const cancellationRate =
-    stats.totalOrders > 0
+    stats && stats.totalOrders > 0
       ? Math.round((stats.cancelledTotalCount / stats.totalOrders) * 100)
       : 0;
 
@@ -144,30 +156,7 @@ export default async function StatisticsPage({ searchParams }: StatsPageProps) {
             </div>
 
             {/* Base Product Selector */}
-            <form method="GET" className="flex items-center gap-2">
-              <input type="hidden" name="preset" value={preset} />
-              {customFrom && <input type="hidden" name="from" value={customFrom} />}
-              {customTo && <input type="hidden" name="to" value={customTo} />}
-              <span className="text-xs font-semibold text-slate-400 uppercase">
-                Product:
-              </span>
-              <select
-                name="product"
-                defaultValue={selectedProduct}
-                onChange={(e) => {
-                  const form = e.target.closest("form");
-                  if (form) form.submit();
-                }}
-                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value="">All Products</option>
-                {baseProducts.map((bp) => (
-                  <option key={bp.name} value={bp.name}>
-                    {bp.name}
-                  </option>
-                ))}
-              </select>
-            </form>
+            <StatsProductFilter baseProducts={baseProducts} selectedProduct={selectedProduct} />
           </div>
 
           {/* Custom Date Range Picker */}
@@ -198,8 +187,33 @@ export default async function StatisticsPage({ searchParams }: StatsPageProps) {
         </CardContent>
       </Card>
 
-      {/* High-Level KPI Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {loadError ? (
+        <Card className="border-rose-200 bg-rose-50/50 dark:border-rose-900/40 dark:bg-rose-950/20">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="inline-flex p-3 rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+              <AlertTriangle className="h-8 w-8" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-rose-900 dark:text-rose-200">
+                Unable to Load Statistics
+              </h2>
+              <p className="text-sm text-rose-700 dark:text-rose-400 max-w-lg mx-auto">
+                {loadError}
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link href="/nn-weblog/stats">
+                <Button variant="default" size="sm">
+                  Retry Loading
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : stats ? (
+        <>
+          {/* High-Level KPI Summary Cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Total Orders & Repeat Rate */}
         <Card>
           <CardContent className="p-5">
@@ -464,6 +478,8 @@ export default async function StatisticsPage({ searchParams }: StatsPageProps) {
           </CardContent>
         </Card>
       )}
+        </>
+      ) : null}
     </div>
   );
 }

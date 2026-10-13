@@ -80,7 +80,19 @@ export async function calculateWeblogStats({
     prisma.order.findMany({
       where,
       orderBy: { date: "asc" },
-      include: {
+      select: {
+        id: true,
+        invoice_id: true,
+        date: true,
+        status: true,
+        total_bill: true,
+        cod_amount: true,
+        delivery_charge: true,
+        net_receivable: true,
+        details: true,
+        returned_items: true,
+        cancellation_type: true,
+        cancel_reason: true,
         customer: {
           select: {
             id: true,
@@ -101,20 +113,21 @@ export async function calculateWeblogStats({
   const { flatBases, flatColors, flatSizes } = dictionaries;
 
   // Helper to get effective unit cost for a product at a specific date
-  function getEffectiveUnitCost(baseProduct: string, orderDate: Date): number {
+  function getEffectiveUnitCost(baseProduct: string, orderDate: Date | string | null | undefined): number {
     const matching = costRecords.filter(
       (c) => c.base_product_name.toLowerCase() === baseProduct.toLowerCase()
     );
 
     if (matching.length === 0) return 0;
 
-    const time = orderDate.getTime();
+    const time = orderDate ? new Date(orderDate).getTime() : Date.now();
+    const safeTime = isNaN(time) ? Date.now() : time;
 
     // 1. Check window matches
     for (const c of matching) {
       const from = c.effective_from ? new Date(c.effective_from).getTime() : -Infinity;
       const to = c.effective_to ? new Date(c.effective_to).getTime() : Infinity;
-      if (time >= from && time <= to) {
+      if (safeTime >= from && safeTime <= to) {
         return c.cost;
       }
     }
@@ -161,16 +174,17 @@ export async function calculateWeblogStats({
   for (const order of orders) {
     grossBilled += order.total_bill || 0;
     totalCod += order.cod_amount || 0;
-    totalDeliveryCharge += order.delivery_charge || 0;
+    const deliveryCharge = order.delivery_charge || 0;
+    totalDeliveryCharge += deliveryCharge;
 
     const netRec =
       order.net_receivable !== null && order.net_receivable !== undefined
         ? order.net_receivable
-        : Math.max(0, (order.cod_amount || order.total_bill) - order.delivery_charge);
+        : Math.max(0, (order.cod_amount || order.total_bill || 0) - deliveryCharge);
     netReceivable += netRec;
 
     // Repeat vs New order
-    const isRepeat = (order.customer.total_orders || 1) > 1;
+    const isRepeat = (order.customer?.total_orders || 1) > 1;
     if (isRepeat) {
       repeatOrders++;
     } else {
@@ -178,7 +192,7 @@ export async function calculateWeblogStats({
     }
 
     // Followed up customer conversion
-    if (order.customer.is_followed_up) {
+    if (order.customer?.is_followed_up) {
       followedUpOrdersCount++;
       followedUpRevenue += netRec;
     }
