@@ -20,8 +20,8 @@ export const prisma = globalForPrisma.prisma ?? (() => {
   const pool = new Pool({ 
     connectionString,
     max: 10,
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 20000 
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000 
   });
   const adapter = new PrismaPg(pool);
   const client = new PrismaClient({ adapter });

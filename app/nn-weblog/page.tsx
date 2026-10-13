@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   const repeatDays = parseInt(settingsMap.repeat_customer_days || "30", 10);
 
   try {
-    const settingsRecords = await prisma.settings.findMany();
+    const settingsRecords = await prisma.settings.findMany().catch(() => []);
     for (const s of settingsRecords) {
       settingsMap[s.key] = s.value;
     }
@@ -52,25 +52,32 @@ export default async function DashboardPage() {
     const repeatThreshold = new Date();
     repeatThreshold.setDate(repeatThreshold.getDate() - repeatDays);
 
-    // Resilient database metrics aggregation using allSettled
-    const results = await Promise.allSettled([
-      prisma.order.count(),
-      prisma.order.count({ where: { status: "delivered" } }),
-      prisma.order.count({ where: { status: "cancelled" } }),
-      prisma.order.count({ where: { status: "pending" } }),
-      prisma.order.aggregate({ _sum: { total_bill: true } }),
-      prisma.customer.count({
-        where: {
-          last_order_date: { lt: inactivityThreshold },
-          is_followed_up: false,
-        },
-      }),
-      prisma.customer.count({
-        where: {
-          total_orders: { gt: 1 },
-          last_order_date: { gte: repeatThreshold },
-        },
-      }),
+    // Fast unified aggregation queries (replaces 8 competing table scans with 2 lightweight SQL queries)
+    const [orderStatsRes, customerStatsRes, recentOrdersRes] = await Promise.allSettled([
+      prisma.$queryRaw<Array<{
+        totalOrders: number;
+        deliveredOrders: number;
+        cancelledOrders: number;
+        pendingCount: number;
+        totalRevenue: number;
+      }>>`
+        SELECT 
+          COUNT(*)::int AS "totalOrders",
+          COUNT(*) FILTER (WHERE status = 'delivered')::int AS "deliveredOrders",
+          COUNT(*) FILTER (WHERE status = 'cancelled')::int AS "cancelledOrders",
+          COUNT(*) FILTER (WHERE status = 'pending')::int AS "pendingCount",
+          COALESCE(SUM(total_bill), 0)::float AS "totalRevenue"
+        FROM "Order";
+      `,
+      prisma.$queryRaw<Array<{
+        pendingFollowUpsCount: number;
+        repeatCustomersCount: number;
+      }>>`
+        SELECT
+          COUNT(*) FILTER (WHERE last_order_date < ${inactivityThreshold} AND is_followed_up = false)::int AS "pendingFollowUpsCount",
+          COUNT(*) FILTER (WHERE total_orders > 1 AND last_order_date >= ${repeatThreshold})::int AS "repeatCustomersCount"
+        FROM "Customer";
+      `,
       prisma.order.findMany({
         take: 8,
         orderBy: { date: "desc" },
@@ -80,14 +87,30 @@ export default async function DashboardPage() {
       }),
     ]);
 
-    if (results[0].status === "fulfilled") totalOrders = results[0].value;
-    if (results[1].status === "fulfilled") deliveredOrders = results[1].value;
-    if (results[2].status === "fulfilled") cancelledOrders = results[2].value;
-    if (results[3].status === "fulfilled") pendingCount = results[3].value;
-    if (results[4].status === "fulfilled") totalRevenue = results[4].value._sum.total_bill || 0;
-    if (results[5].status === "fulfilled") pendingFollowUpsCount = results[5].value;
-    if (results[6].status === "fulfilled") repeatCustomersCount = results[6].value;
-    if (results[7].status === "fulfilled") recentOrders = results[7].value;
+    if (orderStatsRes.status === "fulfilled" && orderStatsRes.value[0]) {
+      const row = orderStatsRes.value[0];
+      totalOrders = Number(row.totalOrders || 0);
+      deliveredOrders = Number(row.deliveredOrders || 0);
+      cancelledOrders = Number(row.cancelledOrders || 0);
+      pendingCount = Number(row.pendingCount || 0);
+      totalRevenue = Number(row.totalRevenue || 0);
+    } else if (orderStatsRes.status === "rejected") {
+      console.error("Order stats query rejected:", orderStatsRes.reason);
+    }
+
+    if (customerStatsRes.status === "fulfilled" && customerStatsRes.value[0]) {
+      const row = customerStatsRes.value[0];
+      pendingFollowUpsCount = Number(row.pendingFollowUpsCount || 0);
+      repeatCustomersCount = Number(row.repeatCustomersCount || 0);
+    } else if (customerStatsRes.status === "rejected") {
+      console.error("Customer stats query rejected:", customerStatsRes.reason);
+    }
+
+    if (recentOrdersRes.status === "fulfilled") {
+      recentOrders = recentOrdersRes.value;
+    } else if (recentOrdersRes.status === "rejected") {
+      console.error("Recent orders query rejected:", recentOrdersRes.reason);
+    }
 
     // Fallback if count query had transient issue but orders exist
     if (totalOrders === 0 && recentOrders.length > 0) {
