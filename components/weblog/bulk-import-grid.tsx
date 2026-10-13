@@ -95,28 +95,93 @@ export function BulkImportGrid() {
     ...rows.map((r) => r.items?.length || 0)
   );
 
-  // RFC 4180 quote-aware TSV/CSV tokenizer
+  // Robust spreadsheet quote-aware tokenizer (RFC 4180 compliant with dirty data tolerance)
   const parseRFC4180 = (text: string, delimiter: string = "\t"): string[][] => {
     const parsedRows: string[][] = [];
     let currentRow: string[] = [];
     let currentField = "";
     let insideQuotes = false;
 
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      const nextChar = text[i + 1];
+    let i = 0;
+    const len = text.length;
 
-      if (char === '"') {
-        if (insideQuotes && nextChar === '"') {
-          currentField += '"';
-          i++; // skip escaped quote
-        } else {
-          insideQuotes = !insideQuotes;
+    while (i < len) {
+      const char = text[i];
+      const nextChar = i + 1 < len ? text[i + 1] : "";
+
+      // A field is ONLY treated as quoted if the quote starts at the beginning of the field
+      if (currentField.trim().length === 0 && !insideQuotes) {
+        if (char === '"') {
+          insideQuotes = true;
+          i++;
+          continue;
         }
-      } else if (char === delimiter && !insideQuotes) {
+      }
+
+      if (insideQuotes) {
+        if (char === '"') {
+          if (nextChar === '"') {
+            // Escaped quote: "" -> "
+            currentField += '"';
+            i += 2;
+            continue;
+          } else if (
+            nextChar === delimiter ||
+            nextChar === "\r" ||
+            nextChar === "\n" ||
+            nextChar === ""
+          ) {
+            // Legitimate closing quote followed by delimiter, newline, or EOF
+            insideQuotes = false;
+            i++; // skip closing quote
+            continue;
+          } else {
+            // Literal quote inside quoted text (e.g. "Snuggly Palazzo 38" length")
+            currentField += '"';
+            i++;
+            continue;
+          }
+        } else if (char === "\r" || char === "\n") {
+          // Safeguard: Check if next line starts with a new order row (date pattern YYYY-MM-DD or tabs)
+          // Prevents an accidental unclosed quote from swallowing hundreds of subsequent rows
+          const restOfText = text.slice(char === "\r" && nextChar === "\n" ? i + 2 : i + 1);
+          const nextLineMatch = restOfText.match(/^([^\r\n]*)/);
+          const nextLine = nextLineMatch ? nextLineMatch[1] : "";
+
+          const tabCount = (nextLine.match(/\t/g) || []).length;
+          const startsWithDate = /^\s*\d{4}-\d{2}-\d{2}/.test(nextLine);
+
+          if (startsWithDate && tabCount >= 3) {
+            // Accidental unclosed quote: recover and start new row
+            insideQuotes = false;
+            if (char === "\r" && nextChar === "\n") i++;
+            currentRow.push(currentField.trim());
+            currentField = "";
+            if (currentRow.some((c) => c.length > 0)) {
+              parsedRows.push(currentRow);
+            }
+            currentRow = [];
+            i++;
+            continue;
+          } else {
+            // Genuine multiline field content
+            currentField += char;
+            i++;
+            continue;
+          }
+        } else {
+          currentField += char;
+          i++;
+          continue;
+        }
+      }
+
+      // Outside quotes:
+      if (char === delimiter) {
         currentRow.push(currentField.trim());
         currentField = "";
-      } else if ((char === "\r" || char === "\n") && !insideQuotes) {
+        i++;
+      } else if (char === "\r" || char === "\n") {
         if (char === "\r" && nextChar === "\n") {
           i++;
         }
@@ -126,8 +191,11 @@ export function BulkImportGrid() {
           parsedRows.push(currentRow);
         }
         currentRow = [];
+        i++;
       } else {
+        // Normal characters, including inch marks (e.g. 38") in unquoted fields
         currentField += char;
+        i++;
       }
     }
 
