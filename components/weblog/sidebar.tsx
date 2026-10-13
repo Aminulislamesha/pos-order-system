@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   ArrowLeft,
   ShoppingCart,
+  ClipboardCheck,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/weblog/utils";
 
@@ -34,6 +36,16 @@ const NAV_ITEMS = [
     name: "Orders",
     href: "/nn-weblog/orders",
     icon: Package,
+  },
+  {
+    name: "Review Queue",
+    href: "/nn-weblog/review",
+    icon: ClipboardCheck,
+  },
+  {
+    name: "Product & Sales Stats",
+    href: "/nn-weblog/stats",
+    icon: BarChart3,
   },
   {
     name: "Customers",

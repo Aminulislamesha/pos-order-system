@@ -39,7 +39,11 @@ export async function POST(
     }
 
     // Call Steadfast API
-    const result = await fetchSteadfastStatusByInvoice(order.invoice_id);
+    const result = await fetchSteadfastStatusByInvoice(order.invoice_id, {
+      cod_amount: order.cod_amount,
+      delivery_charge: order.delivery_charge,
+      consignment_id: order.consignment_id,
+    });
 
     if (!result.success || !result.status) {
       return NextResponse.json(
@@ -53,18 +57,32 @@ export async function POST(
 
     const newStatus = result.status;
     const previousStatus = order.status;
+    const now = new Date();
+
+    const updateData: Record<string, unknown> = {
+      status: newStatus,
+      tracking_code: result.trackingCode || order.tracking_code,
+      consignment_id: result.consignmentId || order.consignment_id,
+      cod_amount: result.codAmount ?? order.cod_amount,
+      delivery_charge: result.deliveryCharge ?? order.delivery_charge,
+      net_receivable: result.netReceivable ?? (order.cod_amount - order.delivery_charge),
+      cancellation_type: result.cancellationType || order.cancellation_type,
+      cancel_reason: result.cancelReason || order.cancel_reason,
+      requires_manual_review: result.requiresManualReview || order.requires_manual_review,
+      manual_review_status: result.manualReviewStatus || order.manual_review_status,
+      steadfast_created_at: result.steadfastCreatedAt || order.steadfast_created_at,
+      delivery_date: result.deliveryDate || order.delivery_date,
+      return_date: result.returnDate || order.return_date,
+      return_status: result.returnStatus || order.return_status,
+      last_status_checked_at: now,
+    };
 
     let updatedOrder;
     if (previousStatus !== newStatus) {
       const [orderResult] = await prisma.$transaction([
         prisma.order.update({
           where: { id: order.id },
-          data: {
-            status: newStatus,
-            tracking_code: result.trackingCode || order.tracking_code,
-            consignment_id: result.consignmentId || order.consignment_id,
-            last_status_checked_at: new Date(),
-          },
+          data: updateData,
           include: {
             customer: true,
             tracking_history: { orderBy: { timestamp: "desc" } },
@@ -76,7 +94,7 @@ export async function POST(
             previous_status: previousStatus,
             new_status: newStatus,
             message: `Manual refresh triggered: status updated from ${previousStatus} to ${newStatus}`,
-            timestamp: new Date(),
+            timestamp: now,
           },
         }),
       ]);
@@ -84,11 +102,7 @@ export async function POST(
     } else {
       updatedOrder = await prisma.order.update({
         where: { id: order.id },
-        data: {
-          last_status_checked_at: new Date(),
-          tracking_code: result.trackingCode || order.tracking_code,
-          consignment_id: result.consignmentId || order.consignment_id,
-        },
+        data: updateData,
         include: {
           customer: true,
           tracking_history: { orderBy: { timestamp: "desc" } },

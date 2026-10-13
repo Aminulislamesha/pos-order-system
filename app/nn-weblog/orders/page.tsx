@@ -34,7 +34,15 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   const whereClause: Record<string, unknown> = {};
 
-  if (statusFilter && statusFilter !== "all") {
+  if (statusFilter === "needs_review") {
+    whereClause.requires_manual_review = true;
+  } else if (statusFilter === "cancelled_with_charge") {
+    whereClause.status = "cancelled";
+    whereClause.cancellation_type = "with_delivery_charge";
+  } else if (statusFilter === "cancelled_without_charge") {
+    whereClause.status = "cancelled";
+    whereClause.cancellation_type = "without_delivery_charge";
+  } else if (statusFilter && statusFilter !== "all") {
     whereClause.status = statusFilter;
   }
 
@@ -48,12 +56,14 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let totalCount = 0;
   let pendingCount = 0;
+  let reviewCount = 0;
   let orders: any[] = [];
 
   try {
-    const [count, pendingTotal, list] = await Promise.all([
+    const [count, pendingTotal, reviewTotal, list] = await Promise.all([
       prisma.order.count({ where: whereClause }),
       prisma.order.count({ where: { status: "pending" } }),
+      prisma.order.count({ where: { requires_manual_review: true } }),
       prisma.order.findMany({
         where: whereClause,
         skip: (page - 1) * pageSize,
@@ -66,6 +76,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     ]);
     totalCount = count;
     pendingCount = pendingTotal;
+    reviewCount = reviewTotal;
     orders = list;
   } catch (err) {
     console.error("Orders query error:", err);
@@ -75,11 +86,14 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   const STATUSES = [
     { label: "All Orders", value: "" },
+    { label: `Needs Review (${reviewCount})`, value: "needs_review", highlight: reviewCount > 0 },
     { label: "Pending", value: "pending" },
     { label: "Delivered", value: "delivered" },
     { label: "Partial Delivered", value: "partial_delivered" },
     { label: "In Transit", value: "in_transit" },
-    { label: "Cancelled", value: "cancelled" },
+    { label: "Cancelled (All)", value: "cancelled" },
+    { label: "Cancelled (With Chg)", value: "cancelled_with_charge" },
+    { label: "Cancelled (No Chg)", value: "cancelled_without_charge" },
     { label: "Hold", value: "hold" },
   ];
 
@@ -159,60 +173,103 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/70 text-xs uppercase text-slate-500 dark:bg-slate-800/50">
                   <tr>
-                    <th className="px-6 py-3 font-semibold">Invoice ID</th>
-                    <th className="px-6 py-3 font-semibold">Date</th>
-                    <th className="px-6 py-3 font-semibold">Customer</th>
-                    <th className="px-6 py-3 font-semibold">Address</th>
-                    <th className="px-6 py-3 font-semibold">Total Bill</th>
-                    <th className="px-6 py-3 font-semibold">Status</th>
-                    <th className="px-6 py-3 text-right font-semibold">Action</th>
+                    <th className="px-5 py-3 font-semibold">Invoice ID</th>
+                    <th className="px-3 py-3 font-semibold">Date</th>
+                    <th className="px-4 py-3 font-semibold">Customer</th>
+                    <th className="px-3 py-3 font-semibold">Total Bill</th>
+                    <th className="px-3 py-3 font-semibold">COD</th>
+                    <th className="px-3 py-3 font-semibold">Deliv Chg</th>
+                    <th className="px-3 py-3 font-semibold">Net Rec</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 text-right font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {orders.map((o) => (
-                    <tr
-                      key={o.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors"
-                    >
-                      <td className="px-6 py-4 font-mono font-semibold text-slate-900 dark:text-slate-100">
-                        {o.invoice_id}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-500">
-                        {formatDate(o.date)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Link
-                          href={`/nn-weblog/customers/${o.customer.id}`}
-                          className="font-medium text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                          {o.customer.name}
-                        </Link>
-                        <div className="font-mono text-xs text-slate-400">
-                          {o.customer.phone}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                        {o.address}
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
-                        {formatCurrency(o.total_bill)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <InlineRowStatusRefresher
-                          orderId={o.id}
-                          invoiceId={o.invoice_id}
-                          initialStatus={o.status}
-                        />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <Link href={`/nn-weblog/orders/${o.id}`}>
-                          <Button variant="outline" size="sm" className="h-8 text-xs">
-                            View Details
-                          </Button>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {orders.map((o) => {
+                    const netRec =
+                      o.net_receivable !== null && o.net_receivable !== undefined
+                        ? o.net_receivable
+                        : Math.max(0, (o.cod_amount || o.total_bill) - o.delivery_charge);
+
+                    return (
+                      <tr
+                        key={o.id}
+                        className="hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors"
+                      >
+                        <td className="px-5 py-4 font-mono font-semibold text-slate-900 dark:text-slate-100">
+                          <div>{o.invoice_id}</div>
+                          {o.requires_manual_review && (
+                            <Link href="/nn-weblog/review">
+                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 mt-1 cursor-pointer">
+                                Review Needed
+                              </span>
+                            </Link>
+                          )}
+                        </td>
+                        <td className="px-3 py-4 text-xs text-slate-500 whitespace-nowrap">
+                          {formatDate(o.date)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <Link
+                            href={`/nn-weblog/customers/${o.customer.id}`}
+                            className="font-medium text-blue-600 hover:underline dark:text-blue-400 block"
+                          >
+                            {o.customer.name}
+                          </Link>
+                          <div className="font-mono text-xs text-slate-400">
+                            {o.customer.phone}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                          {formatCurrency(o.total_bill)}
+                        </td>
+                        <td className="px-3 py-4 text-xs font-mono whitespace-nowrap">
+                          {o.cod_amount > 0 ? (
+                            formatCurrency(o.cod_amount)
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-4 text-xs text-slate-500 whitespace-nowrap">
+                          {formatCurrency(o.delivery_charge)}
+                        </td>
+                        <td className="px-3 py-4 text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                          {formatCurrency(netRec)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col items-start gap-1">
+                            <InlineRowStatusRefresher
+                              orderId={o.id}
+                              invoiceId={o.invoice_id}
+                              initialStatus={o.status}
+                            />
+                            {o.status === "cancelled" && o.cancellation_type && (
+                              <span className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">
+                                {o.cancellation_type === "with_delivery_charge"
+                                  ? "With deliv chg"
+                                  : "Without deliv chg"}
+                              </span>
+                            )}
+                            {o.cancel_reason && (
+                              <span
+                                className="text-[10px] text-slate-500 dark:text-slate-400 italic truncate max-w-[140px] cursor-help"
+                                title={`Steadfast Note: ${o.cancel_reason}`}
+                              >
+                                Note: {o.cancel_reason}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                          <Link href={`/nn-weblog/orders/${o.id}`}>
+                            <Button variant="outline" size="sm" className="h-8 text-xs">
+                              View Details
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

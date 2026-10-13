@@ -82,6 +82,16 @@ async function handleSync(payload: SyncRequestPayload) {
       status: true,
       tracking_code: true,
       consignment_id: true,
+      cod_amount: true,
+      delivery_charge: true,
+      cancellation_type: true,
+      cancel_reason: true,
+      requires_manual_review: true,
+      manual_review_status: true,
+      steadfast_created_at: true,
+      delivery_date: true,
+      return_date: true,
+      return_status: true,
     },
   });
 
@@ -117,22 +127,39 @@ async function handleSync(payload: SyncRequestPayload) {
     const chunkPromises = chunk.map(async (order) => {
       const now = new Date();
       try {
-        const res = await fetchSteadfastStatusByInvoice(order.invoice_id);
+        const res = await fetchSteadfastStatusByInvoice(order.invoice_id, {
+          cod_amount: order.cod_amount,
+          delivery_charge: order.delivery_charge,
+          consignment_id: order.consignment_id,
+        });
 
         if (res.success && res.status) {
           const newStatus = res.status;
           const statusChanged = order.status !== newStatus;
 
+          const updateData: Record<string, unknown> = {
+            status: newStatus,
+            tracking_code: res.trackingCode || order.tracking_code,
+            consignment_id: res.consignmentId || order.consignment_id,
+            cod_amount: res.codAmount ?? order.cod_amount,
+            delivery_charge: res.deliveryCharge ?? order.delivery_charge,
+            net_receivable: res.netReceivable ?? (order.cod_amount - order.delivery_charge),
+            cancellation_type: res.cancellationType || order.cancellation_type,
+            cancel_reason: res.cancelReason || order.cancel_reason,
+            requires_manual_review: res.requiresManualReview || order.requires_manual_review,
+            manual_review_status: res.manualReviewStatus || order.manual_review_status,
+            steadfast_created_at: res.steadfastCreatedAt || order.steadfast_created_at,
+            delivery_date: res.deliveryDate || order.delivery_date,
+            return_date: res.returnDate || order.return_date,
+            return_status: res.returnStatus || order.return_status,
+            last_status_checked_at: now,
+          };
+
           if (statusChanged) {
             await prisma.$transaction([
               prisma.order.update({
                 where: { id: order.id },
-                data: {
-                  status: newStatus,
-                  tracking_code: res.trackingCode || order.tracking_code,
-                  consignment_id: res.consignmentId || order.consignment_id,
-                  last_status_checked_at: now,
-                },
+                data: updateData,
               }),
               prisma.trackingHistory.create({
                 data: {
@@ -147,11 +174,7 @@ async function handleSync(payload: SyncRequestPayload) {
           } else {
             await prisma.order.update({
               where: { id: order.id },
-              data: {
-                last_status_checked_at: now,
-                tracking_code: res.trackingCode || order.tracking_code,
-                consignment_id: res.consignmentId || order.consignment_id,
-              },
+              data: updateData,
             });
           }
 

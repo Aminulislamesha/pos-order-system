@@ -131,27 +131,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Extract COD and Delivery Charge
+    const rawCod = payload.cod_amount ?? (payload.consignment as Record<string, unknown>)?.cod_amount;
+    const rawDeliveryCharge = payload.delivery_charge ?? (payload.consignment as Record<string, unknown>)?.delivery_charge;
+
+    const codAmount = typeof rawCod === "number" ? rawCod : order.cod_amount;
+    const deliveryCharge = typeof rawDeliveryCharge === "number" ? rawDeliveryCharge : order.delivery_charge;
+    const netReceivable = codAmount - deliveryCharge;
+
+    // Apply COD < 200 Rule
+    let effectiveStatus = newStatus;
+    let cancellationType: string | null = order.cancellation_type;
+    let requiresManualReview = order.requires_manual_review;
+    let manualReviewStatus = order.manual_review_status;
+
+    if (codAmount < 200 && (effectiveStatus === "cancelled" || effectiveStatus === "partial_delivered" || codAmount > 0)) {
+      effectiveStatus = "cancelled";
+      cancellationType = codAmount > 0 ? "WITH_DELIVERY_CHARGE" : "WITHOUT_DELIVERY_CHARGE";
+    } else if (effectiveStatus === "cancelled") {
+      cancellationType = codAmount > 0 ? "WITH_DELIVERY_CHARGE" : "WITHOUT_DELIVERY_CHARGE";
+    }
+
+    // Check Partial Delivery with COD >= 200
+    if (effectiveStatus === "partial_delivered" && codAmount >= 200) {
+      requiresManualReview = true;
+      manualReviewStatus = "PARTIAL_DELIVERY_ITEMS";
+    }
+
     const previousStatus = order.status;
+    const now = new Date();
+
+    const deliveryDate = effectiveStatus === "delivered" ? order.delivery_date || now : order.delivery_date;
+    const returnDate = effectiveStatus === "cancelled" ? order.return_date || now : order.return_date;
+
+    const updateData: Record<string, unknown> = {
+      status: effectiveStatus,
+      tracking_code: trackingCode || order.tracking_code,
+      consignment_id: consignmentId || order.consignment_id,
+      cod_amount: codAmount,
+      delivery_charge: deliveryCharge,
+      net_receivable: netReceivable,
+      cancellation_type: cancellationType,
+      requires_manual_review: requiresManualReview,
+      manual_review_status: manualReviewStatus,
+      delivery_date: deliveryDate,
+      return_date: returnDate,
+      last_status_checked_at: now,
+    };
 
     // Check if status actually changed or needs history entry
-    if (previousStatus !== newStatus) {
+    if (previousStatus !== effectiveStatus) {
       await prisma.$transaction([
         prisma.order.update({
           where: { id: order.id },
-          data: {
-            status: newStatus,
-            tracking_code: trackingCode || order.tracking_code,
-            consignment_id: consignmentId || order.consignment_id,
-            last_status_checked_at: new Date(),
-          },
+          data: updateData,
         }),
         prisma.trackingHistory.create({
           data: {
             order_id: order.id,
             previous_status: previousStatus,
-            new_status: newStatus,
+            new_status: effectiveStatus,
             message: message,
-            timestamp: new Date(),
+            timestamp: now,
           },
         }),
       ]);
@@ -161,26 +202,26 @@ export async function POST(request: NextRequest) {
         updated: true,
         invoice_id: invoiceId,
         previous_status: previousStatus,
-        new_status: newStatus,
+        new_status: effectiveStatus,
+        cod_amount: codAmount,
+        net_receivable: netReceivable,
       });
     }
 
-    // Status was the same, just touch last_status_checked_at and tracking code if present
+    // Status was the same, update financial fields and tracking metadata
     await prisma.order.update({
       where: { id: order.id },
-      data: {
-        tracking_code: trackingCode || order.tracking_code,
-        consignment_id: consignmentId || order.consignment_id,
-        last_status_checked_at: new Date(),
-      },
+      data: updateData,
     });
 
     return NextResponse.json({
       success: true,
       updated: false,
-      message: "Status unchanged",
+      message: "Status unchanged, financials updated",
       invoice_id: invoiceId,
       current_status: previousStatus,
+      cod_amount: codAmount,
+      net_receivable: netReceivable,
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : "Webhook processing failed";

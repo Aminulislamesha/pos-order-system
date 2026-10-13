@@ -94,10 +94,18 @@ export function parseProductName(rawName: string, flatBases: any[], flatColors: 
   if (matchedBase && matchedColor && matchedSize) {
     return {
       success: true,
+      base: matchedBase,
+      color: matchedColor,
+      size: matchedSize,
       canonicalName: `${matchedBase} - ${matchedColor} / ${matchedSize}`,
       commaName: `${matchedBase} - ${matchedColor}, ${matchedSize}`
     };
   }
 
-  return { success: false };
+  return {
+    success: false,
+    base: matchedBase,
+    color: matchedColor,
+    size: matchedSize,
+  };
 }

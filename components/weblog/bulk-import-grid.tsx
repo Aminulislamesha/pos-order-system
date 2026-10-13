@@ -95,24 +95,66 @@ export function BulkImportGrid() {
     ...rows.map((r) => r.items?.length || 0)
   );
 
+  // RFC 4180 quote-aware TSV/CSV tokenizer
+  const parseRFC4180 = (text: string, delimiter: string = "\t"): string[][] => {
+    const parsedRows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentField = "";
+    let insideQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (char === '"') {
+        if (insideQuotes && nextChar === '"') {
+          currentField += '"';
+          i++; // skip escaped quote
+        } else {
+          insideQuotes = !insideQuotes;
+        }
+      } else if (char === delimiter && !insideQuotes) {
+        currentRow.push(currentField.trim());
+        currentField = "";
+      } else if ((char === "\r" || char === "\n") && !insideQuotes) {
+        if (char === "\r" && nextChar === "\n") {
+          i++;
+        }
+        currentRow.push(currentField.trim());
+        currentField = "";
+        if (currentRow.some((c) => c.length > 0)) {
+          parsedRows.push(currentRow);
+        }
+        currentRow = [];
+      } else {
+        currentField += char;
+      }
+    }
+
+    if (currentField.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentField.trim());
+      if (currentRow.some((c) => c.length > 0)) {
+        parsedRows.push(currentRow);
+      }
+    }
+
+    return parsedRows;
+  };
+
   // Parse TSV / CSV text lines into GridRow objects
   // Sequence: date, invoice, note, name, phone number, address 1, address 2, three empty columns, bill, product, quantity...
   const parseSpreadsheetText = (text: string): GridRow[] => {
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    if (!text || !text.trim()) return [];
 
-    if (lines.length === 0) return [];
+    // Automatically detect tab vs comma
+    const delimiter = text.includes("\t") ? "\t" : ",";
+    const rawMatrix = parseRFC4180(text, delimiter);
+
+    if (rawMatrix.length === 0) return [];
 
     const newRows: GridRow[] = [];
 
-    lines.forEach((line, index) => {
-      // Split by tab (Excel/Sheets standard) or fallback to comma
-      const cols = line.includes("\t")
-        ? line.split("\t").map((c) => c.trim())
-        : line.split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
-
+    rawMatrix.forEach((cols, index) => {
       // Skip header if detected in line 0
       if (
         index === 0 &&
@@ -384,6 +426,13 @@ export function BulkImportGrid() {
             (data.existingCustomersLinked || 0),
         };
 
+        // Immediately remove successfully imported chunk rows from grid state to prevent double import
+        const savedChunkIds = new Set(chunks[i].map((r) => r.id));
+        setRows((prev) => {
+          const remaining = prev.filter((r) => !savedChunkIds.has(r.id));
+          return remaining.length === 0 ? INITIAL_ROWS : remaining;
+        });
+
         const percent = Math.round(((i + 1) / chunks.length) * 100);
         setProgressPercent(percent);
       }
@@ -392,7 +441,9 @@ export function BulkImportGrid() {
       setImportStatus("Import completed successfully!");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Import failed";
-      setErrorMsg(msg);
+      setErrorMsg(
+        `${msg}. Successfully saved ${accumulatedStats.inserted} orders. Remaining unimported rows are kept in the grid ready to retry.`
+      );
     } finally {
       setIsImporting(false);
     }

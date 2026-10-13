@@ -108,7 +108,7 @@ export default async function RepeatCustomersPage() {
                   {customers.map((c) => (
                     <tr
                       key={c.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors"
+                      className="hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors"
                     >
                       <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
                         {c.name}

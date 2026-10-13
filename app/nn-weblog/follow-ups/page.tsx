@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/weblog/utils";
 import { FollowUpButton } from "@/components/weblog/follow-up-button";
+import { CustomerProfileNoteDialog } from "@/components/weblog/customer-profile-note-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,15 @@ export default async function FollowUpsPage() {
       },
       include: {
         _count: { select: { orders: true } },
+        orders: {
+          take: 1,
+          orderBy: { date: "desc" },
+          select: {
+            id: true,
+            invoice_id: true,
+            date: true,
+          },
+        },
       },
     });
   } catch (err) {
@@ -86,12 +96,14 @@ export default async function FollowUpsPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/70 text-xs uppercase text-slate-500 dark:bg-slate-800/50">
                   <tr>
-                    <th className="px-6 py-3 font-semibold">Customer</th>
-                    <th className="px-6 py-3 font-semibold">Phone</th>
-                    <th className="px-6 py-3 font-semibold">Total Orders</th>
-                    <th className="px-6 py-3 font-semibold">Last Order Date</th>
-                    <th className="px-6 py-3 font-semibold">Inactivity Period</th>
-                    <th className="px-6 py-3 text-right font-semibold">Action</th>
+                    <th className="px-5 py-3 font-semibold">Customer</th>
+                    <th className="px-4 py-3 font-semibold">Phone</th>
+                    <th className="px-4 py-3 font-semibold">Latest Invoice</th>
+                    <th className="px-4 py-3 font-semibold">Profile Note</th>
+                    <th className="px-4 py-3 font-semibold">Total Orders</th>
+                    <th className="px-4 py-3 font-semibold">Last Order Date</th>
+                    <th className="px-4 py-3 font-semibold">Inactivity Period</th>
+                    <th className="px-5 py-3 text-right font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -104,27 +116,44 @@ export default async function FollowUpsPage() {
                       : 0;
 
                     const orderCount = Math.max(c.total_orders, c._count?.orders ?? 0, 1);
+                    const latestInvoice = c.orders?.[0]?.invoice_id;
 
                     return (
                       <tr
                         key={c.id}
-                        className="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors"
+                        className="hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors"
                       >
-                        <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
+                        <td className="px-5 py-4 font-semibold text-slate-900 dark:text-slate-100">
                           {c.name}
                         </td>
-                        <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">
+                        <td className="px-4 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">
                           {c.phone}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-4">
+                          {latestInvoice ? (
+                            <span className="font-mono text-xs font-medium text-blue-600 dark:text-blue-400">
+                              {latestInvoice}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <CustomerProfileNoteDialog
+                            customerId={c.id}
+                            customerName={c.name}
+                            initialNote={c.profile_note}
+                          />
+                        </td>
+                        <td className="px-4 py-4">
                           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                             {orderCount} {orderCount === 1 ? "order" : "orders"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-xs text-slate-500">
+                        <td className="px-4 py-4 text-xs text-slate-500">
                           {formatDate(c.last_order_date)}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-4">
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                             <ClockAlert className="h-3 w-3" />
                             {daysAgo} days ago

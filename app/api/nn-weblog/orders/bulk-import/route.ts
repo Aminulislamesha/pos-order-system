@@ -6,6 +6,7 @@ import {
   getBaseInvoiceId,
   isExchangeOrResendInvoice,
 } from "@/lib/weblog/utils";
+import { analyzeExchangeOrder } from "@/lib/weblog/exchange-utils";
 
 export interface RawImportRow {
   date?: string;
@@ -115,6 +116,8 @@ export async function POST(request: NextRequest) {
         date: parsedDate,
         invoice_id: invoice,
         note: details,
+        rawNote: noteStr,
+        rawItems: validItems,
         name,
         phone,
         address: combinedAddress,
@@ -179,13 +182,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Base Invoice Tracking:
-    // Suffixes like -1, -2, -3, -exc or repeat rows of same base invoice do NOT count as repeat orders!
+    // 3. Base Invoice Tracking & Existing Orders for Smart Merging:
     const allCustomerIds = Array.from(customerMap.values()).map((c) => c.id);
-    const existingCustomerOrders = await prisma.order.findMany({
-      where: { customer_id: { in: allCustomerIds } },
-      select: { customer_id: true, invoice_id: true },
-    });
+    const incomingInvoices = rowsToProcess.map((r) => r.invoice_id);
+
+    const [existingCustomerOrders, existingInvoicesInDb] = await Promise.all([
+      prisma.order.findMany({
+        where: { customer_id: { in: allCustomerIds } },
+        select: { customer_id: true, invoice_id: true },
+      }),
+      prisma.order.findMany({
+        where: { invoice_id: { in: incomingInvoices } },
+      }),
+    ]);
+
+    const existingOrderMap = new Map(existingInvoicesInDb.map((o) => [o.invoice_id, o]));
 
     const customerKnownBases = new Map<string, Set<string>>();
     for (const o of existingCustomerOrders) {
@@ -198,17 +209,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Customer contact points accumulator
+    const customerAddressesMap = new Map<string, Set<string>>();
+    const customerPhonesMap = new Map<string, Set<string>>();
+    for (const c of customerMap.values() as any) {
+      customerAddressesMap.set(c.id, new Set(c.addresses || []));
+      customerPhonesMap.set(c.id, new Set(c.alternate_phones || []));
+    }
+
     // 4. Prepare orders and customer update aggregations
-    const ordersData: Array<{
-      invoice_id: string;
-      customer_id: string;
-      date: Date;
-      address: string;
-      details: string;
-      total_bill: number;
-      delivery_charge: number;
-      status: string;
-    }> = [];
+    const ordersDataToInsert: Array<any> = [];
+    const mergePromises: Array<Promise<any>> = [];
+    let mergedOrdersCount = 0;
 
     const customerOrderCounts = new Map<string, { count: number; maxDate: Date }>();
 
@@ -216,7 +228,38 @@ export async function POST(request: NextRequest) {
       const customer = customerMap.get(r.phone);
       if (!customer) continue;
 
-      ordersData.push({
+      // Accumulate unique address and alternate phone
+      if (r.address && r.address !== "No address provided") {
+        customerAddressesMap.get(customer.id)?.add(r.address);
+      }
+      if (r.phone) {
+        customerPhonesMap.get(customer.id)?.add(r.phone);
+      }
+
+      // Exchange analysis: check if pant count mismatch requires review
+      const exchangeAnalysis = analyzeExchangeOrder(r.invoice_id, r.rawNote || r.note, r.rawItems);
+      const requiresReview = exchangeAnalysis.requiresReview;
+      const reviewStatus = exchangeAnalysis.requiresReview ? "EXCHANGE_MISMATCH" : null;
+
+      // Smart merge check
+      const existingOrder = existingOrderMap.get(r.invoice_id);
+      if (existingOrder) {
+        mergedOrdersCount++;
+        mergePromises.push(
+          prisma.order.update({
+            where: { id: existingOrder.id },
+            data: {
+              total_bill: r.total_bill,
+              details: r.note,
+              address: r.address,
+              ...(requiresReview ? { requires_manual_review: true, manual_review_status: reviewStatus } : {}),
+            },
+          })
+        );
+        continue;
+      }
+
+      ordersDataToInsert.push({
         invoice_id: r.invoice_id,
         customer_id: customer.id,
         date: r.date,
@@ -224,7 +267,11 @@ export async function POST(request: NextRequest) {
         details: r.note,
         total_bill: r.total_bill,
         delivery_charge: r.delivery_charge,
+        cod_amount: 0.0,
+        net_receivable: -r.delivery_charge,
         status: "pending",
+        requires_manual_review: requiresReview,
+        manual_review_status: reviewStatus,
       });
 
       const baseInv = getBaseInvoiceId(r.invoice_id);
@@ -258,16 +305,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Bulk insert all orders (without skipping any duplicate invoice)
-    await prisma.order.createMany({
-      data: ordersData,
-    });
+    // 5. Execute insertions and merges
+    if (ordersDataToInsert.length > 0) {
+      await prisma.order.createMany({
+        data: ordersDataToInsert,
+      });
+    }
 
-    // 6. Update customer total_orders and last_order_date
+    if (mergePromises.length > 0) {
+      await Promise.all(mergePromises);
+    }
+
+    // 6. Update customer total_orders, last_order_date, addresses, and alternate_phones
     const updatePromises = Array.from(customerOrderCounts.entries()).map(([customerId, agg]) => {
       const currentCust = Array.from(customerMap.values()).find((c) => c.id === customerId);
       const currentTotal = currentCust?.total_orders || 0;
       const incrementCount = currentTotal === 0 ? Math.max(1, agg.count) : agg.count;
+
+      const addrs = Array.from(customerAddressesMap.get(customerId) || []);
+      const phones = Array.from(customerPhonesMap.get(customerId) || []);
 
       return prisma.customer.update({
         where: { id: customerId },
@@ -275,6 +331,8 @@ export async function POST(request: NextRequest) {
           total_orders: { increment: incrementCount },
           last_order_date: agg.maxDate,
           is_followed_up: false,
+          addresses: addrs,
+          alternate_phones: phones,
         },
       });
     });
@@ -284,7 +342,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       processed: rows.length,
-      inserted: ordersData.length,
+      inserted: ordersDataToInsert.length,
+      merged: mergedOrdersCount,
       exchangeOrders: exchangeOrdersCount,
       newCustomersCreated: newCustomersToCreate.length,
       existingCustomersLinked: rowsToProcess.length - newCustomersToCreate.length,

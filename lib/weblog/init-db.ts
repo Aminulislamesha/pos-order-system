@@ -90,7 +90,47 @@ export async function ensureWeblogTables() {
         CREATE UNIQUE INDEX IF NOT EXISTS "Settings_key_key" ON "Settings"("key");
       `);
 
-      // Auto-repair customer total_orders if any customer has orders but total_orders is 0
+      // 1. Customer schema additions (profile_note, addresses, alternate_phones)
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "profile_note" TEXT;
+        ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "addresses" TEXT[] NOT NULL DEFAULT '{}';
+        ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "alternate_phones" TEXT[] NOT NULL DEFAULT '{}';
+      `);
+
+      // 2. Order schema additions (cod, net_receivable, timestamps, review status, etc.)
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "cod_amount" DOUBLE PRECISION NOT NULL DEFAULT 0.0;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "net_receivable" DOUBLE PRECISION NOT NULL DEFAULT 0.0;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "steadfast_created_at" TIMESTAMP(3);
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "delivery_date" TIMESTAMP(3);
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "return_date" TIMESTAMP(3);
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "return_status" TEXT;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "cancellation_type" TEXT;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "cancel_reason" TEXT;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "requires_manual_review" BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "manual_review_status" TEXT;
+        ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "returned_items" TEXT;
+        CREATE INDEX IF NOT EXISTS "Order_consignment_id_idx" ON "Order"("consignment_id");
+        CREATE INDEX IF NOT EXISTS "Order_requires_manual_review_idx" ON "Order"("requires_manual_review");
+      `);
+
+      // 3. ProductCost table
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "ProductCost" (
+          "id" TEXT NOT NULL,
+          "base_product_name" TEXT NOT NULL,
+          "cost" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+          "effective_from" TIMESTAMP(3),
+          "effective_to" TIMESTAMP(3),
+          "notes" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "ProductCost_pkey" PRIMARY KEY ("id")
+        );
+        CREATE INDEX IF NOT EXISTS "ProductCost_base_product_name_idx" ON "ProductCost"("base_product_name");
+      `);
+
+      // 4. Auto-repair customer total_orders if any customer has orders but total_orders is 0
       await prisma.$executeRawUnsafe(`
         UPDATE "Customer" c
         SET total_orders = sub.cnt

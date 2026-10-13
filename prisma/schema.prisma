@@ -103,6 +103,9 @@ model Customer {
   last_order_date     DateTime?
   last_follow_up_date DateTime?
   is_followed_up      Boolean   @default(false)
+  profile_note        String?   @db.Text
+  addresses           String[]  @default([])
+  alternate_phones    String[]  @default([])
   orders              Order[]
 
   createdAt           DateTime  @default(now())
@@ -123,9 +126,20 @@ model Order {
   details                String?           @db.Text
   total_bill             Float             @default(0.0)
   delivery_charge        Float             @default(0.0)
+  cod_amount             Float             @default(0.0)
+  net_receivable         Float             @default(0.0)
   status                 String            @default("pending")
   tracking_code          String?
   consignment_id         String?
+  steadfast_created_at   DateTime?
+  delivery_date          DateTime?
+  return_date            DateTime?
+  return_status          String?
+  cancellation_type      String?
+  cancel_reason          String?           @db.Text
+  requires_manual_review Boolean           @default(false)
+  manual_review_status   String?
+  returned_items         String?           @db.Text
   last_status_checked_at DateTime?
   tracking_history       TrackingHistory[]
 
@@ -136,6 +150,8 @@ model Order {
   @@index([customer_id])
   @@index([status])
   @@index([date])
+  @@index([consignment_id])
+  @@index([requires_manual_review])
 }
 
 model TrackingHistory {
@@ -156,4 +172,17 @@ model Settings {
   key       String   @unique
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model ProductCost {
+  id                String    @id @default(uuid())
+  base_product_name String
+  cost              Float     @default(0.0)
+  effective_from    DateTime?
+  effective_to      DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([base_product_name])
 }

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/weblog/utils";
 import { FollowUpButton } from "@/components/weblog/follow-up-button";
+import { CustomerProfileEditor } from "@/components/weblog/customer-profile-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,9 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
         </div>
       </div>
 
+      {/* Customer Profile & Editable Contact Points */}
+      <CustomerProfileEditor customer={customer} />
+
       {/* Aggregated KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -200,48 +204,76 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/70 text-xs uppercase text-slate-500 dark:bg-slate-800/50">
                   <tr>
-                    <th className="px-6 py-3 font-semibold">Invoice ID</th>
-                    <th className="px-6 py-3 font-semibold">Date</th>
-                    <th className="px-6 py-3 font-semibold">Address</th>
-                    <th className="px-6 py-3 font-semibold">Total Bill</th>
-                    <th className="px-6 py-3 font-semibold">Delivery Charge</th>
-                    <th className="px-6 py-3 font-semibold">Status</th>
-                    <th className="px-6 py-3 text-right font-semibold">Action</th>
+                    <th className="px-5 py-3 font-semibold">Invoice ID</th>
+                    <th className="px-4 py-3 font-semibold">Date</th>
+                    <th className="px-4 py-3 font-semibold">Address</th>
+                    <th className="px-4 py-3 font-semibold">Total Bill</th>
+                    <th className="px-4 py-3 font-semibold">COD</th>
+                    <th className="px-4 py-3 font-semibold">Delivery Charge</th>
+                    <th className="px-4 py-3 font-semibold">Net Receivable</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-5 py-3 text-right font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {customer.orders.map((o) => (
-                    <tr
-                      key={o.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors"
-                    >
-                      <td className="px-6 py-4 font-mono font-semibold text-slate-900 dark:text-slate-100">
-                        {o.invoice_id}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-500">
-                        {formatDate(o.date)}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                        {o.address}
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
-                        {formatCurrency(o.total_bill)}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-500">
-                        {formatCurrency(o.delivery_charge)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge status={o.status}>{o.status}</Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <Link href={`/nn-weblog/orders/${o.id}`}>
-                          <Button variant="outline" size="sm" className="h-8 text-xs">
-                            View Order
-                          </Button>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {customer.orders.map((o) => {
+                    const netRec =
+                      o.net_receivable !== null && o.net_receivable !== undefined
+                        ? o.net_receivable
+                        : Math.max(0, (o.cod_amount || o.total_bill) - o.delivery_charge);
+
+                    return (
+                      <tr
+                        key={o.id}
+                        className="hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors"
+                      >
+                        <td className="px-5 py-4 font-mono font-semibold text-slate-900 dark:text-slate-100">
+                          {o.invoice_id}
+                        </td>
+                        <td className="px-4 py-4 text-xs text-slate-500">
+                          {formatDate(o.date)}
+                        </td>
+                        <td className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                          {o.address}
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100">
+                          {formatCurrency(o.total_bill)}
+                        </td>
+                        <td className="px-4 py-4 text-xs font-mono">
+                          {o.cod_amount > 0 ? (
+                            formatCurrency(o.cod_amount)
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-xs text-slate-500">
+                          {formatCurrency(o.delivery_charge)}
+                        </td>
+                        <td className="px-4 py-4 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(netRec)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge status={o.status}>{o.status}</Badge>
+                            {o.status === "cancelled" && o.cancellation_type && (
+                              <span className="text-[10px] text-rose-600 dark:text-rose-400">
+                                {o.cancellation_type === "with_delivery_charge"
+                                  ? "With delivery chg"
+                                  : "Without delivery chg"}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <Link href={`/nn-weblog/orders/${o.id}`}>
+                            <Button variant="outline" size="sm" className="h-8 text-xs">
+                              View Order
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
