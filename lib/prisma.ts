@@ -6,14 +6,16 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Next.js Turbopack evaluates modules at build time.
-// Inject a dummy URL if missing so PrismaClient doesn't crash during build.
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = "postgres://dummy:dummy@localhost:5432/dummy";
-}
+// Inject Neon / Vercel Storage / fallback URL
+const dbUrl =
+  process.env.DATABASE_URL ||
+  process.env.NEON_DATABASE_URL ||
+  process.env.NEON_URL ||
+  process.env.STORAGE_URL ||
+  "postgres://dummy:dummy@localhost:5432/dummy";
 
-// Ensure the driver is properly configured
-const connectionString = process.env.DATABASE_URL;
+process.env.DATABASE_URL = dbUrl;
+const connectionString = dbUrl;
 
 // Prisma 7.8.0 requires an adapter for Edge/Serverless environments
 export const prisma = globalForPrisma.prisma ?? (() => {
