@@ -177,17 +177,23 @@ export async function matchAllPendingStatements(): Promise<{
     const invKey = st.invoice.trim().toLowerCase();
     const baseKey = getBaseInvoiceId(st.invoice)?.trim().toLowerCase();
 
-    const matchedOrder =
-      orderByCid.get(st.order_id) ||
-      orderByInvoice.get(invKey) ||
-      (baseKey ? orderByBaseInv.get(baseKey) : undefined);
+    // 1. Strict match by Steadfast Consignment ID (Order.consignment_id === Statement.order_id)
+    let matchedOrder = orderByCid.get(st.order_id);
+
+    // 2. Safe fallback: If order does not have consignment_id yet, match by exact invoice
+    if (!matchedOrder) {
+      const candidate = orderByInvoice.get(invKey) || (baseKey ? orderByBaseInv.get(baseKey) : undefined);
+      if (candidate && (!candidate.consignment_id || candidate.consignment_id === st.order_id)) {
+        matchedOrder = candidate;
+      }
+    }
 
     if (matchedOrder) {
       try {
         await reconcileSingleOrderWithStatement(matchedOrder, st);
         reconciledCount++;
       } catch (err) {
-        console.error(`Error reconciling order ${matchedOrder.invoice_id} with statement ${st.order_id}:`, err);
+        console.error(`Error reconciling order ${matchedOrder.invoice_id} with statement CID ${st.order_id}:`, err);
       }
     }
   }
@@ -257,10 +263,16 @@ export async function matchNewOrdersAgainstStoredStatements(
     const invKey = st.invoice.trim().toLowerCase();
     const baseKey = getBaseInvoiceId(st.invoice)?.trim().toLowerCase();
 
-    const matchedOrder =
-      orderByCid.get(st.order_id) ||
-      orderByInvoice.get(invKey) ||
-      (baseKey ? orderByBaseInv.get(baseKey) : undefined);
+    // 1. Strict match by Steadfast Consignment ID (Order.consignment_id === Statement.order_id)
+    let matchedOrder = orderByCid.get(st.order_id);
+
+    // 2. Safe fallback: If order does not have consignment_id yet, match by exact invoice
+    if (!matchedOrder) {
+      const candidate = orderByInvoice.get(invKey) || (baseKey ? orderByBaseInv.get(baseKey) : undefined);
+      if (candidate && (!candidate.consignment_id || candidate.consignment_id === st.order_id)) {
+        matchedOrder = candidate;
+      }
+    }
 
     if (matchedOrder) {
       try {

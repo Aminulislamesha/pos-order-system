@@ -37,6 +37,8 @@ export default async function DashboardPage() {
   let totalRevenue = 0;
   let pendingFollowUpsCount = 0;
   let repeatCustomersCount = 0;
+  let inactivityDays = 60;
+  let repeatDays = 60;
   let recentOrders: any[] = [];
   let dbError: string | null = null;
 
@@ -46,8 +48,8 @@ export default async function DashboardPage() {
       settingsMap[s.key] = s.value;
     }
 
-    const inactivityDays = parseInt(settingsMap.inactivity_days || "30", 10);
-    const repeatDays = parseInt(settingsMap.repeat_customer_days || "30", 10);
+    inactivityDays = parseInt(settingsMap.inactivity_days || "60", 10);
+    repeatDays = parseInt(settingsMap.repeat_customer_days || "60", 10);
 
     const inactivityThreshold = new Date();
     inactivityThreshold.setDate(inactivityThreshold.getDate() - inactivityDays);
