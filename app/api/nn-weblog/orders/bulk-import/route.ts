@@ -339,6 +339,24 @@ export async function POST(request: NextRequest) {
 
     await Promise.all(updatePromises);
 
+    // 7. Record import batch to ActivityLog
+    await prisma.activityLog.create({
+      data: {
+        action: "BULK_IMPORT",
+        title: `${rows.length} rows imported`,
+        details: `Imported batch: ${ordersDataToInsert.length} new orders created, ${mergedOrdersCount} orders merged, ${exchangeOrdersCount} exchange orders flagged, ${newCustomersToCreate.length} new customers added.`,
+        metadata: {
+          totalRows: rows.length,
+          inserted: ordersDataToInsert.length,
+          merged: mergedOrdersCount,
+          exchangeOrders: exchangeOrdersCount,
+          newCustomersCreated: newCustomersToCreate.length,
+          existingCustomersLinked: rowsToProcess.length - newCustomersToCreate.length,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    }).catch((e) => console.error("Failed to write import activity log:", e));
+
     return NextResponse.json({
       success: true,
       processed: rows.length,

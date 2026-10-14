@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Save, CheckCircle2, Clock, ShieldAlert, KeyRound } from "lucide-react";
+import { Save, CheckCircle2, Clock, ShieldAlert, KeyRound, History, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -162,6 +163,32 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             </div>
           </div>
         </CardContent>
+      </Card>
+
+      {/* Audit Log Card */}
+      <Card className="border-blue-200 dark:border-blue-900/60 bg-blue-50/20 dark:bg-blue-950/10">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+              <History className="h-4 w-4" />
+              <span>Audit &amp; History Log</span>
+            </span>
+            <Link href="/nn-weblog/history">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 cursor-pointer"
+              >
+                <span>View Full History</span>
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </CardTitle>
+          <CardDescription>
+            Permanent timestamped records of every batch import and application data wipe with exact row counts.
+          </CardDescription>
+        </CardHeader>
       </Card>
 
       {/* Danger Zone: Application Reset */}

@@ -9,6 +9,8 @@ import {
   UserCheck,
   ArrowRight,
   PlusCircle,
+  History,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +38,7 @@ export default async function DashboardPage() {
   let pendingFollowUpsCount = 0;
   let repeatCustomersCount = 0;
   let recentOrders: any[] = [];
+  let dbError: string | null = null;
 
   const inactivityDays = parseInt(settingsMap.inactivity_days || "30", 10);
   const repeatDays = parseInt(settingsMap.repeat_customer_days || "30", 10);
@@ -95,7 +98,13 @@ export default async function DashboardPage() {
       pendingCount = Number(row.pendingCount || 0);
       totalRevenue = Number(row.totalRevenue || 0);
     } else if (orderStatsRes.status === "rejected") {
-      console.error("Order stats query rejected:", orderStatsRes.reason);
+      const reason = String(orderStatsRes.reason?.message || orderStatsRes.reason || "");
+      console.error("Order stats query rejected:", reason);
+      if (reason.includes("planLimitReached")) {
+        dbError = "Your Prisma Postgres database account has reached its plan limits (planLimitReached). Please upgrade your database plan on console.prisma.io or update your DATABASE_URL in Vercel to restore live order queries.";
+      } else {
+        dbError = reason || "Failed to query order statistics from database.";
+      }
     }
 
     if (customerStatsRes.status === "fulfilled" && customerStatsRes.value[0]) {
@@ -116,8 +125,9 @@ export default async function DashboardPage() {
     if (totalOrders === 0 && recentOrders.length > 0) {
       totalOrders = recentOrders.length;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("Dashboard database query error:", err);
+    dbError = err?.message || "Failed to communicate with database.";
   }
 
   return (
@@ -147,6 +157,16 @@ export default async function DashboardPage() {
               <span>Bulk Import</span>
             </Button>
           </Link>
+          <Link href="/nn-weblog/history">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20 gap-1.5 cursor-pointer"
+            >
+              <History className="h-4 w-4" />
+              <span>History Log</span>
+            </Button>
+          </Link>
           <Link href="/nn-weblog/orders">
             <Button
               size="sm"
@@ -159,6 +179,43 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Database Error Banner */}
+      {dbError && (
+        <Card className="border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/30">
+          <CardContent className="p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-400 shrink-0">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div className="space-y-1.5 flex-1">
+              <h3 className="text-base font-bold text-rose-900 dark:text-rose-200">
+                Database Restriction: planLimitReached
+              </h3>
+              <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
+                {dbError}
+              </p>
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <a
+                  href="https://console.prisma.io"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 shadow-sm transition-colors"
+                >
+                  <span>Open Prisma Console</span>
+                  <ArrowRight className="h-3 w-3" />
+                </a>
+                <Link
+                  href="/nn-weblog/history"
+                  className="text-xs text-rose-800 dark:text-rose-300 font-medium hover:underline flex items-center gap-1"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  <span>View Audit &amp; History Log</span>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

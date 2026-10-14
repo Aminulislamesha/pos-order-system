@@ -186,3 +186,16 @@ model ProductCost {
 
   @@index([base_product_name])
 }
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  action    String
+  title     String
+  details   String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
+

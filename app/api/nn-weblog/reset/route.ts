@@ -16,6 +16,21 @@ export async function POST() {
       prisma.customer.deleteMany({}),
     ]);
 
+    // 4. Record event into ActivityLog so it is permanently auditable
+    await prisma.activityLog.create({
+      data: {
+        action: "DATA_RESET",
+        title: "All application data cleared",
+        details: `Application data reset: Deleted ${deletedOrders.count} orders, ${deletedCustomers.count} customers, and ${deletedTracking.count} tracking records.`,
+        metadata: {
+          orders: deletedOrders.count,
+          customers: deletedCustomers.count,
+          trackingHistory: deletedTracking.count,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    }).catch((e) => console.error("Failed to write reset activity log:", e));
+
     return NextResponse.json({
       success: true,
       message: "NN Weblog application reset successfully.",

@@ -19,6 +19,7 @@ import {
   BarChart3,
   PanelLeftClose,
   PanelLeftOpen,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/weblog/utils";
 import { useSidebar } from "./sidebar-context";
@@ -70,6 +71,11 @@ const NAV_ITEMS = [
     name: "Webhook Simulator",
     href: "/nn-weblog/webhook-tester",
     icon: Webhook,
+  },
+  {
+    name: "Audit & History Log",
+    href: "/nn-weblog/history",
+    icon: History,
   },
   {
     name: "Settings",

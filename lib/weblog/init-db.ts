@@ -15,6 +15,19 @@ export async function ensureWeblogTables() {
       // Check if tables already exist to skip heavy DDL
       try {
         await prisma.$queryRawUnsafe(`SELECT 1 FROM "Order" LIMIT 1;`);
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "ActivityLog" (
+            "id" TEXT NOT NULL,
+            "action" TEXT NOT NULL,
+            "title" TEXT NOT NULL,
+            "details" TEXT,
+            "metadata" JSONB,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "ActivityLog_pkey" PRIMARY KEY ("id")
+          );
+          CREATE INDEX IF NOT EXISTS "ActivityLog_action_idx" ON "ActivityLog"("action");
+          CREATE INDEX IF NOT EXISTS "ActivityLog_createdAt_idx" ON "ActivityLog"("createdAt");
+        `).catch(() => {});
         globalForInit.weblogTablesInitialized = true;
         return;
       } catch {
@@ -141,6 +154,18 @@ export async function ensureWeblogTables() {
           CONSTRAINT "ProductCost_pkey" PRIMARY KEY ("id")
         );
         CREATE INDEX IF NOT EXISTS "ProductCost_base_product_name_idx" ON "ProductCost"("base_product_name");
+
+        CREATE TABLE IF NOT EXISTS "ActivityLog" (
+          "id" TEXT NOT NULL,
+          "action" TEXT NOT NULL,
+          "title" TEXT NOT NULL,
+          "details" TEXT,
+          "metadata" JSONB,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "ActivityLog_pkey" PRIMARY KEY ("id")
+        );
+        CREATE INDEX IF NOT EXISTS "ActivityLog_action_idx" ON "ActivityLog"("action");
+        CREATE INDEX IF NOT EXISTS "ActivityLog_createdAt_idx" ON "ActivityLog"("createdAt");
       `);
 
       // 4. Auto-repair customer total_orders if any customer has orders but total_orders is 0
