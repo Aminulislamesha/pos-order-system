@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { cleanPhoneNumber, parseDateToYMD } from "@/lib/weblog/utils";
 import { ResetWeblogButton } from "./reset-weblog-button";
@@ -77,6 +78,7 @@ export function BulkImportGrid() {
   const [importStatus, setImportStatus] = React.useState<string>("");
   const [rawTextModalOpen, setRawTextModalOpen] = React.useState(false);
   const [rawTextInput, setRawTextInput] = React.useState("");
+  const [batchNote, setBatchNote] = React.useState("");
 
   const [stats, setStats] = React.useState<{
     processed: number;
@@ -471,7 +473,7 @@ export function BulkImportGrid() {
         const res = await fetch("/api/nn-weblog/orders/bulk-import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: payload }),
+          body: JSON.stringify({ rows: payload, batch_note: batchNote }),
         });
 
         if (!res.ok) {
@@ -575,6 +577,16 @@ export function BulkImportGrid() {
             onSuccess={handleClear}
             label="Reset Weblog"
           />
+
+          <div className="w-full sm:w-64">
+            <Input
+              placeholder="Batch identification note (e.g. Oct Batch 1)..."
+              value={batchNote}
+              onChange={(e) => setBatchNote(e.target.value)}
+              disabled={isImporting}
+              className="h-9 text-xs bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700"
+            />
+          </div>
 
           <Button
             onClick={handleSaveBulk}

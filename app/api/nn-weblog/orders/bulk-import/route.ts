@@ -22,12 +22,14 @@ export interface RawImportRow {
 }
 
 import { ensureWeblogTables } from "@/lib/weblog/init-db";
+import { matchNewOrdersAgainstStoredStatements } from "@/lib/weblog/reconcile-statements";
 
 export async function POST(request: NextRequest) {
   try {
     await ensureWeblogTables();
     const body = await request.json();
     const rows: RawImportRow[] = body.rows;
+    const batchNote = (body.batch_note || body.note || "").toString().trim();
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: "No rows provided" }, { status: 400 });
@@ -339,12 +341,30 @@ export async function POST(request: NextRequest) {
 
     await Promise.all(updatePromises);
 
-    // 7. Record import batch to ActivityLog
+    // 7. Auto-reconcile new orders against previously uploaded Steadfast statements
+    const importedInvoices = rowsToProcess.map((r) => r.invoice_id);
+    let autoReconciledCount = 0;
+    try {
+      autoReconciledCount = await matchNewOrdersAgainstStoredStatements(importedInvoices);
+    } catch (e) {
+      console.warn("Auto-reconciliation against stored statements warning:", e);
+    }
+
+    // 8. Record import batch to ActivityLog with optional batch note
+    const logDetails = [
+      `Imported batch: ${ordersDataToInsert.length} new orders created, ${mergedOrdersCount} orders merged.`,
+      batchNote ? `Batch Note: "${batchNote}".` : null,
+      autoReconciledCount > 0 ? `Auto-reconciled ${autoReconciledCount} orders with stored Steadfast statements.` : null,
+      `${newCustomersToCreate.length} new customers added, ${exchangeOrdersCount} exchange orders flagged.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     await prisma.activityLog.create({
       data: {
         action: "BULK_IMPORT",
-        title: `${rows.length} rows imported`,
-        details: `Imported batch: ${ordersDataToInsert.length} new orders created, ${mergedOrdersCount} orders merged, ${exchangeOrdersCount} exchange orders flagged, ${newCustomersToCreate.length} new customers added.`,
+        title: batchNote ? `${rows.length} rows imported (${batchNote})` : `${rows.length} rows imported`,
+        details: logDetails,
         metadata: {
           totalRows: rows.length,
           inserted: ordersDataToInsert.length,
@@ -352,6 +372,8 @@ export async function POST(request: NextRequest) {
           exchangeOrders: exchangeOrdersCount,
           newCustomersCreated: newCustomersToCreate.length,
           existingCustomersLinked: rowsToProcess.length - newCustomersToCreate.length,
+          batch_note: batchNote || null,
+          autoReconciledCount,
           timestamp: new Date().toISOString(),
         },
       },
@@ -365,6 +387,8 @@ export async function POST(request: NextRequest) {
       exchangeOrders: exchangeOrdersCount,
       newCustomersCreated: newCustomersToCreate.length,
       existingCustomersLinked: rowsToProcess.length - newCustomersToCreate.length,
+      batchNote: batchNote || null,
+      autoReconciledCount,
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : "Bulk import failed";

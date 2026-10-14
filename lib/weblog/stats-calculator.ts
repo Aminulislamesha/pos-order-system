@@ -246,19 +246,56 @@ export async function calculateWeblogStats({
       itemsStr = noteMatch[2];
     }
 
-    const itemChunks = itemsStr
-      ? itemsStr
-          .split(/,\s*(?=[^,]+?\s*(?:\(x\d+\)|$))/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+    // Robust item chunk splitting: split on comma after (xN) or semicolons/newlines
+    const itemChunks: string[] = [];
+    if (itemsStr) {
+      if (/\(x\d+\)/.test(itemsStr)) {
+        itemChunks.push(
+          ...itemsStr
+            .split(/(?<=\(x\d+\))\s*,\s*|\s*;\s*|\n+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        );
+      } else {
+        itemChunks.push(
+          ...itemsStr
+            .split(/[;\n]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        );
+      }
+    }
 
     // If order was full exchange with 0 new sales (pants sent == pants returned), skip sales counting
     if (exchangeAnalysis?.isFullExchange) {
       continue;
     }
 
-    for (const chunk of itemChunks) {
+    const PURE_SIZES = new Set([
+      "xs",
+      "s",
+      "m",
+      "l",
+      "xl",
+      "2xl",
+      "3xl",
+      "4xl",
+      "5xl",
+      "xxl",
+      "xxxl",
+      "free",
+      "large",
+      "medium",
+      "small",
+    ]);
+
+    for (let chunk of itemChunks) {
+      // 1. Strip inverted prefix if accidental e.g. "XXL (x1), Snuggly Palazzo - Black" -> "Snuggly Palazzo - Black"
+      const invertedMatch = chunk.match(/^([A-Za-z0-9\s/]+)\s*\(x\d+\)\s*,\s*(.*)$/);
+      if (invertedMatch) {
+        chunk = invertedMatch[2].trim();
+      }
+
       // Extract qty e.g. "Snuggly Palazzo - Black, XXL (x2)"
       let itemName = chunk;
       let qty = 1;
@@ -268,10 +305,37 @@ export async function calculateWeblogStats({
         qty = parseInt(qtyMatch[2], 10) || 1;
       }
 
+      // If the entire item chunk is just a size (e.g. "XXL", "XL", "L"), skip it
+      if (PURE_SIZES.has(itemName.toLowerCase().trim())) {
+        continue;
+      }
+
       // Check with POS dictionary alias engine
       const parsed = parseProductName(itemName, flatBases, flatColors, flatSizes);
 
-      const base = parsed.base || itemName.split("-")[0]?.trim() || "Uncategorized";
+      // Determine base product canonical name
+      let base = parsed.base;
+      if (!base) {
+        // Fallback search across flatBases
+        const itemLower = itemName.toLowerCase();
+        for (const fb of flatBases) {
+          if (itemLower.includes(fb.variant)) {
+            base = fb.canonical;
+            break;
+          }
+        }
+      }
+
+      if (!base) {
+        const candidateBase = itemName.split("-")[0]?.trim();
+        // If candidate base is a lone size or abbreviation (e.g. "XXL", "XL", "M"), do not treat as product
+        if (candidateBase && !PURE_SIZES.has(candidateBase.toLowerCase()) && candidateBase.length > 3) {
+          base = candidateBase;
+        } else {
+          base = "Uncategorized";
+        }
+      }
+
       const color = parsed.color || "Standard";
       const size = parsed.size || "Free";
       const key = `${base}___${color}___${size}`.toLowerCase();

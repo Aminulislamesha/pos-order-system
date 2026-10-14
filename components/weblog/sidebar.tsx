@@ -20,6 +20,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   History,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/weblog/utils";
 import { useSidebar } from "./sidebar-context";
@@ -41,6 +42,12 @@ const NAV_ITEMS = [
     name: "Orders",
     href: "/nn-weblog/orders",
     icon: Package,
+  },
+  {
+    name: "Steadfast Statements",
+    href: "/nn-weblog/statements",
+    icon: FileSpreadsheet,
+    badge: "Reconcile",
   },
   {
     name: "Review Queue",

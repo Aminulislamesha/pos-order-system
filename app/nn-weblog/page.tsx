@@ -40,14 +40,14 @@ export default async function DashboardPage() {
   let recentOrders: any[] = [];
   let dbError: string | null = null;
 
-  const inactivityDays = parseInt(settingsMap.inactivity_days || "30", 10);
-  const repeatDays = parseInt(settingsMap.repeat_customer_days || "30", 10);
-
   try {
     const settingsRecords = await prisma.settings.findMany().catch(() => []);
     for (const s of settingsRecords) {
       settingsMap[s.key] = s.value;
     }
+
+    const inactivityDays = parseInt(settingsMap.inactivity_days || "30", 10);
+    const repeatDays = parseInt(settingsMap.repeat_customer_days || "30", 10);
 
     const inactivityThreshold = new Date();
     inactivityThreshold.setDate(inactivityThreshold.getDate() - inactivityDays);

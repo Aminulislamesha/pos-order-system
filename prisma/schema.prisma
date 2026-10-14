@@ -199,3 +199,33 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+model SteadfastStatement {
+  id                 String    @id @default(uuid())
+  order_id           String    @unique // Consignment ID from Steadfast (e.g. 305787566)
+  tracking_code      String?
+  invoice            String
+  recipient_name     String?
+  recipient_phone    String?
+  recipient_address  String?   @db.Text
+  delivery_status    String?
+  approval_status    String?
+  delivery_time      String?
+  rider_name         String?
+  rider_phone        String?
+  cod_amount         Float     @default(0.0)
+  shipping_charge    Float     @default(0.0)
+  cod_charge         Float     @default(0.0)
+  payment_status     String?
+  note               String?
+  created_at_courier String?
+  approved_at        String?
+  is_matched         Boolean   @default(false)
+  matched_order_id   String?
+  matched_at         DateTime?
+  uploaded_at        DateTime  @default(now())
+
+  @@index([invoice])
+  @@index([is_matched])
+  @@index([uploaded_at])
+}
+

@@ -14,10 +14,15 @@ export const metadata = {
   description: "Customers requiring customer-success outreach due to order inactivity",
 };
 
-import { ensureWeblogTables } from "@/lib/weblog/init-db";
+interface FollowUpsPageProps {
+  searchParams: Promise<{
+    days?: string;
+  }>;
+}
 
-export default async function FollowUpsPage() {
+export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps) {
   await ensureWeblogTables();
+  const params = await searchParams;
   let inactivityDays = 30;
   let customers: any[] = [];
 
@@ -25,7 +30,8 @@ export default async function FollowUpsPage() {
     const inactivitySetting = await prisma.settings.findUnique({
       where: { key: "inactivity_days" },
     });
-    inactivityDays = parseInt(inactivitySetting?.value || "30", 10);
+    const savedDays = parseInt(inactivitySetting?.value || "30", 10);
+    inactivityDays = params.days ? parseInt(params.days, 10) || savedDays : savedDays;
 
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - inactivityDays);
@@ -55,6 +61,8 @@ export default async function FollowUpsPage() {
     console.error("Follow-ups query error:", err);
   }
 
+  const PRESETS = [30, 60, 90, 180];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -68,15 +76,36 @@ export default async function FollowUpsPage() {
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Customers with no order for more than {inactivityDays} days who haven&rsquo;t been followed up yet.
+            Customers with no order for more than <strong className="text-slate-700 dark:text-slate-300">{inactivityDays} days</strong> who haven&rsquo;t been followed up yet.
           </p>
         </div>
 
-        <Link href="/nn-weblog/settings">
-          <Button variant="outline" size="sm" className="text-xs">
-            Adjust Threshold ({inactivityDays} days)
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900 shadow-xs">
+            <span className="px-2 text-[11px] font-semibold text-slate-400 uppercase">
+              Threshold:
+            </span>
+            {PRESETS.map((d) => (
+              <Link
+                key={d}
+                href={`/nn-weblog/follow-ups?days=${d}`}
+                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                  inactivityDays === d
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                }`}
+              >
+                {d}d
+              </Link>
+            ))}
+          </div>
+
+          <Link href="/nn-weblog/settings">
+            <Button variant="outline" size="sm" className="text-xs">
+              Settings ({inactivityDays}d default)
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
@@ -102,7 +131,7 @@ export default async function FollowUpsPage() {
                     <th className="px-4 py-3 font-semibold">Profile Note</th>
                     <th className="px-4 py-3 font-semibold">Total Orders</th>
                     <th className="px-4 py-3 font-semibold">Last Order Date</th>
-                    <th className="px-4 py-3 font-semibold">Inactivity Period</th>
+                    <th className="px-4 py-3 font-semibold">Days Inactive</th>
                     <th className="px-5 py-3 text-right font-semibold">Action</th>
                   </tr>
                 </thead>
@@ -156,7 +185,7 @@ export default async function FollowUpsPage() {
                         <td className="px-4 py-4">
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                             <ClockAlert className="h-3 w-3" />
-                            {daysAgo} days ago
+                            {daysAgo} days inactive
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">

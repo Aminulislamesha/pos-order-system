@@ -166,6 +166,36 @@ export async function ensureWeblogTables() {
         );
         CREATE INDEX IF NOT EXISTS "ActivityLog_action_idx" ON "ActivityLog"("action");
         CREATE INDEX IF NOT EXISTS "ActivityLog_createdAt_idx" ON "ActivityLog"("createdAt");
+
+        CREATE TABLE IF NOT EXISTS "SteadfastStatement" (
+          "id" TEXT NOT NULL,
+          "order_id" TEXT NOT NULL,
+          "tracking_code" TEXT,
+          "invoice" TEXT NOT NULL,
+          "recipient_name" TEXT,
+          "recipient_phone" TEXT,
+          "recipient_address" TEXT,
+          "delivery_status" TEXT,
+          "approval_status" TEXT,
+          "delivery_time" TEXT,
+          "rider_name" TEXT,
+          "rider_phone" TEXT,
+          "cod_amount" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+          "shipping_charge" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+          "cod_charge" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+          "payment_status" TEXT,
+          "note" TEXT,
+          "created_at_courier" TEXT,
+          "approved_at" TEXT,
+          "is_matched" BOOLEAN NOT NULL DEFAULT false,
+          "matched_order_id" TEXT,
+          "matched_at" TIMESTAMP(3),
+          "uploaded_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "SteadfastStatement_pkey" PRIMARY KEY ("id")
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "SteadfastStatement_order_id_key" ON "SteadfastStatement"("order_id");
+        CREATE INDEX IF NOT EXISTS "SteadfastStatement_invoice_idx" ON "SteadfastStatement"("invoice");
+        CREATE INDEX IF NOT EXISTS "SteadfastStatement_is_matched_idx" ON "SteadfastStatement"("is_matched");
       `);
 
       // 4. Auto-repair customer total_orders if any customer has orders but total_orders is 0

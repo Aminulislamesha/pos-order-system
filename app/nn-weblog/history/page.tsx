@@ -217,11 +217,18 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
                                 ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
                                 : isImport
                                 ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+                                : log.action.includes("STATEMENT")
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
                                 : "border-slate-200 bg-slate-50 text-slate-700"
                             }`}
                           >
                             {log.action}
                           </Badge>
+                          {(log.metadata as any)?.batch_note && (
+                            <span className="inline-flex items-center rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                              Batch: {(log.metadata as any).batch_note}
+                            </span>
+                          )}
                         </div>
 
                         {log.details && (
