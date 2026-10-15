@@ -100,7 +100,8 @@ export default function POSDashboard() {
   useEffect(() => {
     if (activeView === "factoryReport") {
       setFactoryLoading(true);
-      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}&dates=${selectedFactoryDates.join(',')}&inclusions=${activeFactoryInclusions.join(',')}`)
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      fetch(`/api/inventory/factory-shortages?filters=${activeFactoryFilters.join(',')}&dates=${selectedFactoryDates.join(',')}&inclusions=${activeFactoryInclusions.join(',')}&today=${todayStr}`)
         .then(res => res.json())
         .then(json => {
           if (json.success) setFactoryData(json.data);
@@ -850,20 +851,20 @@ export default function POSDashboard() {
 
               <div className="flex flex-col md:flex-row flex-wrap items-center gap-2 w-full">
                 
-                {/* MULTI-DATE FILTER CHIPS & PICKER */}
+                {/* MULTI-DATE EXCLUSION FILTER CHIPS & PICKER */}
                 <div className="flex flex-wrap items-center bg-white border border-gray-300 rounded-md p-1 shadow-sm w-full md:w-auto min-h-[40px]">
-                  <span className="text-gray-400 text-lg mx-2">📅</span>
+                  <span className="text-gray-400 text-lg mx-2" title="Exclude dates">📅</span>
                   
                   {selectedFactoryDates.map(date => (
-                    <span key={date} className="flex items-center bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded mr-2 mb-1 mt-1">
-                      {date}
+                    <span key={date} className="flex items-center bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold px-2 py-1 rounded mr-2 mb-1 mt-1">
+                      Exclude: {date}
                       <button 
                         onClick={() => {
                           setSelectedFactoryDates(prev => prev.filter(d => d !== date));
                           setSelectedFactoryRows([]);
                         }}
-                        className="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none"
-                        title="Remove date"
+                        className="ml-1.5 text-rose-400 hover:text-rose-700 focus:outline-none"
+                        title="Remove excluded date"
                       >✕</button>
                     </span>
                   ))}
@@ -883,7 +884,7 @@ export default function POSDashboard() {
                       }, 0);
                     }}
                     className="outline-none text-sm font-semibold text-gray-700 bg-transparent cursor-pointer ml-1 mb-1 mt-1"
-                    title="Add Date"
+                    title="Select Date to Exclude"
                   />
                   
                   {selectedFactoryDates.length > 0 && (

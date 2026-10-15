@@ -13,6 +13,29 @@ export async function GET(request: Request) {
     const activeDates = datesParam ? datesParam.split(',').filter(Boolean) : [];
     const inclusionsParam = url.searchParams.get('inclusions');
     const activeInclusions = inclusionsParam ? inclusionsParam.split(',').filter(Boolean).map(x => x.toLowerCase()) : [];
+    const todayParam = url.searchParams.get('today');
+
+    // Helper to determine today's date in YYYY-MM-DD
+    const getTodayDateStr = () => {
+      if (todayParam && /^\d{4}-\d{2}-\d{2}$/.test(todayParam)) {
+        return todayParam;
+      }
+      try {
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Dhaka',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        return formatter.format(new Date());
+      } catch {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      }
+    };
+
+    const todayDateStr = getTodayDateStr();
+    const [todayY, todayM, todayD] = todayDateStr.split('-').map(Number);
 
     // Helper for date matching
     const getISODate = (serial: string | number) => {
@@ -159,8 +182,58 @@ export async function GET(request: Request) {
     
     if (activeDates.length > 0) {
       filteredOrders = filteredOrders.filter((o: any) => {
-        const iso = getISODate(o.rawDateScore);
-        return activeDates.includes(iso);
+        const orderIso = getISODate(o.rawDateScore);
+
+        // If the order's date was not selected in the calendar, do NOT remove it: keep it!
+        if (!activeDates.includes(orderIso)) {
+          return true;
+        }
+
+        // The order IS on one of the selected dates.
+        // It must be removed UNLESS it has a VU or D tag for today's date or a previous date:
+        const colC = String(o.colC || '').trim();
+
+        // Match VU or D tags followed by day number, e.g. VU15, D15, VU14, D13, VU16, etc.
+        const tagMatches = [...colC.matchAll(/\b(?:VU|D|dispatch)[-\s]*(\d+)\b/gi)];
+
+        if (tagMatches.length > 0) {
+          const hasPastOrTodayTag = tagMatches.some((m) => {
+            const tagDay = parseInt(m[1], 10);
+
+            if (orderIso) {
+              const [orderY, orderM, orderD] = orderIso.split('-').map(Number);
+              // If order is in the same month as today:
+              if (orderY === todayY && orderM === todayM) {
+                return tagDay <= todayD;
+              }
+              // If order is across months (e.g. order in previous month):
+              let tagY = orderY;
+              let tagM = orderM;
+              if (tagDay < orderD) {
+                tagM += 1;
+                if (tagM > 12) {
+                  tagM = 1;
+                  tagY += 1;
+                }
+              }
+              const tagDateStr = `${tagY}-${String(tagM).padStart(2, '0')}-${String(tagDay).padStart(2, '0')}`;
+              return tagDateStr <= todayDateStr;
+            }
+
+            return tagDay <= todayD;
+          });
+
+          if (hasPastOrTodayTag) {
+            // Do NOT remove this order!
+            return true;
+          }
+        } else if (/\bVU\b/i.test(colC)) {
+          // Plain 'VU' without a number means Very Urgent (due immediately/today), so keep it
+          return true;
+        }
+
+        // All other orders from the selected dates are removed
+        return false;
       });
     }
 
