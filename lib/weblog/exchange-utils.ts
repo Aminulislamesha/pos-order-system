@@ -81,6 +81,7 @@ export function analyzeExchangeOrder(
   sentPants: number;
   requiresReview: boolean;
   reviewReason: string | null;
+  isFullExchange: boolean;
 } {
   const isExc = /-exc|-exchange/i.test(invoiceId.trim());
   if (!isExc) {
@@ -90,6 +91,7 @@ export function analyzeExchangeOrder(
       sentPants: 0,
       requiresReview: false,
       reviewReason: null,
+      isFullExchange: false,
     };
   }
 
@@ -106,6 +108,7 @@ export function analyzeExchangeOrder(
         sentPants,
         requiresReview: true,
         reviewReason: `EXCHANGE_MISMATCH: Sent ${sentPants} items, but note states ${returnedPants} return items.`,
+        isFullExchange: false,
       };
     }
 
@@ -115,6 +118,7 @@ export function analyzeExchangeOrder(
       sentPants,
       requiresReview: false,
       reviewReason: null,
+      isFullExchange: true,
     };
   }
 
@@ -125,5 +129,6 @@ export function analyzeExchangeOrder(
     sentPants,
     requiresReview: true,
     reviewReason: "EXCHANGE_MISMATCH: Exchange invoice without clear return count in note.",
+    isFullExchange: false,
   };
 }

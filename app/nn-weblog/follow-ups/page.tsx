@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/weblog/utils";
 import { FollowUpButton } from "@/components/weblog/follow-up-button";
 import { CustomerProfileNoteDialog } from "@/components/weblog/customer-profile-note-dialog";
+import { ensureWeblogTables } from "@/lib/weblog/init-db";
 
 export const dynamic = "force-dynamic";
 

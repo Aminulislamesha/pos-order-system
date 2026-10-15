@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
       date: Date;
       invoice_id: string;
       note: string;
+      rawNote?: string;
+      rawItems?: any[];
       name: string;
       phone: string;
       address: string;
