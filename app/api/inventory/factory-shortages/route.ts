@@ -269,31 +269,61 @@ export async function GET(request: Request) {
       p.aliases.forEach((a: any) => aliasMap.set(a.alias.toLowerCase(), p));
     });
 
+    // Fetch active partial packages to deduct already packed quantities (Option 1)
+    const activePartialPackages = await prisma.partialPackage.findMany({
+      where: { isFulfilled: false }
+    });
+
+    const partialOrderMap = new Map<string, Map<string, number>>();
+    activePartialPackages.forEach((pkg: any) => {
+      const pMap = new Map<string, number>();
+      if (Array.isArray(pkg.packedProducts)) {
+        pkg.packedProducts.forEach((p: any) => {
+          if (p.name) {
+            pMap.set(String(p.name).trim().toLowerCase(), Number(p.packedQty) || 0);
+          }
+        });
+      }
+      partialOrderMap.set(String(pkg.orderId).trim().toLowerCase(), pMap);
+    });
+
     filteredOrders.forEach((o: any) => {
       const orderProducts = [];
+      const orderIdLower = String(o.colB).trim().toLowerCase();
+      const packedMap = partialOrderMap.get(orderIdLower);
+
       for (let i = 11; i < o.cells.length; i += 2) {
         const pName = String(o.cells[i]?.value || "").trim();
         const pQty = parseInt(String(o.cells[i + 1]?.value || "1"), 10) || 1;
         
         if (pName && pName !== "NaN") {
-          const rawLower = pName.toLowerCase();
-          
-          let resolvedCanonicalName = pName; // default to raw if we fail
-
-          // 1. Try explicit alias map
-          if (aliasMap.has(rawLower)) {
-            resolvedCanonicalName = aliasMap.get(rawLower).name;
-          } else {
-            // 2. Try intelligent parsing
-            const parsed = parseProductName(pName, flatBases, flatColors, flatSizes);
-            if (parsed.success && parsed.canonicalName) {
-              resolvedCanonicalName = parsed.canonicalName;
-            }
+          // If this is a partial order, deduct already packed items so factory only produces the unpacked remainder
+          let neededQty = pQty;
+          if (packedMap) {
+            const packedQty = packedMap.get(pName.toLowerCase()) ?? 0;
+            neededQty = Math.max(0, pQty - packedQty);
           }
 
-          orderProducts.push({ rawName: resolvedCanonicalName, qty: pQty, cellIndex: i });
-          const current = demandMap.get(resolvedCanonicalName.toLowerCase()) || 0;
-          demandMap.set(resolvedCanonicalName.toLowerCase(), current + pQty);
+          if (neededQty > 0) {
+            const rawLower = pName.toLowerCase();
+            
+            let resolvedCanonicalName = pName; // default to raw if we fail
+
+            // 1. Try explicit alias map
+            if (aliasMap.has(rawLower)) {
+              resolvedCanonicalName = aliasMap.get(rawLower).name;
+            } else {
+              // 2. Try intelligent parsing
+              const parsed = parseProductName(pName, flatBases, flatColors, flatSizes);
+              if (parsed.success && parsed.canonicalName) {
+                resolvedCanonicalName = parsed.canonicalName;
+              }
+            }
+
+            orderProducts.push({ rawName: resolvedCanonicalName, qty: neededQty, cellIndex: i });
+            const current = demandMap.get(resolvedCanonicalName.toLowerCase()) || 0;
+            demandMap.set(resolvedCanonicalName.toLowerCase(), current + neededQty);
+          }
         }
       }
       o.orderProducts = orderProducts;
