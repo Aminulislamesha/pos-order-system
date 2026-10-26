@@ -531,21 +531,99 @@ export default function PartialPackagingPage() {
     });
   };
 
-  // Filtered list for the main table search
-  const displayedPackages = useMemo(() => {
-    if (!searchQuery.trim()) return partialPackages;
-    const q = searchQuery.toLowerCase();
-    return partialPackages.filter(p => {
-      return (
-        p.orderId.toLowerCase().includes(q) ||
-        (p.customerName && p.customerName.toLowerCase().includes(q)) ||
-        (p.phone && p.phone.includes(q)) ||
-        (p.note && p.note.toLowerCase().includes(q)) ||
-        (p.serialNumber && String(p.serialNumber).includes(q)) ||
-        (p.previousSerial && String(p.previousSerial).includes(q)) ||
-        (Array.isArray(p.rawProducts) && p.rawProducts.some(rp => rp.name.toLowerCase().includes(q)))
-      );
+  // Helper to parse VU / D tag and dispatch day for priority ordering
+  const parseTagInfo = (note: string | null) => {
+    if (!note) return { type: 3, day: Infinity };
+    const str = String(note).trim();
+
+    // 1. Check VU first (e.g. VU15, VU 15, VU-15, VU)
+    const vuMatch = str.match(/\bvu[-\s]*(\d*)\b/i);
+    if (vuMatch) {
+      const day = vuMatch[1] ? parseInt(vuMatch[1], 10) : 0;
+      return { type: 1, day };
+    }
+
+    // 2. Check D or dispatch (e.g. D15, D 15, D-15, dispatch 15)
+    const dMatch = str.match(/\b(?:d|dispatch)[-\s]*(\d+)\b/i);
+    if (dMatch) {
+      const day = parseInt(dMatch[1], 10);
+      return { type: 2, day };
+    }
+
+    // 3. Other orders
+    return { type: 3, day: Infinity };
+  };
+
+  // Helper to get chronological timestamp for "oldest orders first"
+  const getOrderTimestamp = (dateStr: string | null, fallbackRow: number = 0): number => {
+    if (!dateStr) return fallbackRow || 0;
+    const num = Number(dateStr);
+    if (!isNaN(num) && num > 40000) {
+      return new Date(Date.UTC(1899, 11, 30)).getTime() + num * 86400000;
+    }
+    const str = String(dateStr).trim();
+    const parts = str.match(/(\d+)\/(\d+)\/(\d+)/);
+    if (parts) {
+      const day = parseInt(parts[1], 10);
+      const month = parseInt(parts[2], 10) - 1;
+      const year = parts[3].length === 2 ? 2000 + parseInt(parts[3], 10) : parseInt(parts[3], 10);
+      return new Date(year, month, day).getTime();
+    }
+    const cleanStr = str.replace(/at\s+/i, '');
+    const d = new Date(cleanStr);
+    return isNaN(d.getTime()) ? (fallbackRow || 0) : d.getTime();
+  };
+
+  // Sort: VU orders first, then D orders, then oldest orders first
+  const sortPartialPackages = (list: PartialPackageRecord[]): PartialPackageRecord[] => {
+    return [...list].sort((a, b) => {
+      // Active orders before Fulfilled orders
+      if (a.isFulfilled !== b.isFulfilled) {
+        return a.isFulfilled ? 1 : -1;
+      }
+
+      const tagA = parseTagInfo(a.note);
+      const tagB = parseTagInfo(b.note);
+
+      // 1. VU orders (type 1) before D orders (type 2) before Other orders (type 3)
+      if (tagA.type !== tagB.type) {
+        return tagA.type - tagB.type;
+      }
+
+      // 2. Within VU or D orders, sort by dispatch day ascending
+      if (tagA.day !== tagB.day) {
+        return tagA.day - tagB.day;
+      }
+
+      // 3. Oldest orders first (smaller timestamp = earlier / older)
+      const timeA = getOrderTimestamp(a.date, a.rowIndex);
+      const timeB = getOrderTimestamp(b.date, b.rowIndex);
+      if (timeA !== timeB) {
+        return timeA - timeB;
+      }
+
+      return (a.rowIndex || 0) - (b.rowIndex || 0);
     });
+  };
+
+  // Filtered & Sorted list for the main table: VU first, then D, then oldest orders first
+  const displayedPackages = useMemo(() => {
+    let list = partialPackages;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(p => {
+        return (
+          p.orderId.toLowerCase().includes(q) ||
+          (p.customerName && p.customerName.toLowerCase().includes(q)) ||
+          (p.phone && p.phone.includes(q)) ||
+          (p.note && p.note.toLowerCase().includes(q)) ||
+          (p.serialNumber && String(p.serialNumber).includes(q)) ||
+          (p.previousSerial && String(p.previousSerial).includes(q)) ||
+          (Array.isArray(p.rawProducts) && p.rawProducts.some(rp => rp.name.toLowerCase().includes(q)))
+        );
+      });
+    }
+    return sortPartialPackages(list);
   }, [partialPackages, searchQuery]);
 
   return (
