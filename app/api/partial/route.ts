@@ -33,21 +33,17 @@ async function getActualSheetId(sheets: any) {
 }
 
 // Helper to find the live 0-based row index for an order ID
-async function findLiveRowIndex(sheets: any, orderId: string, fallbackIndex: number) {
-  try {
-    const colBResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_TAB_NAME}!B:B`,
-    });
-    const rows = colBResponse.data.values || [];
-    const liveIndex = rows.findIndex((row: any) => row && String(row[0]).trim() === orderId.trim());
-    if (liveIndex !== -1) {
-      return liveIndex;
-    }
-  } catch (err) {
-    console.error(`Error looking up live row index for ${orderId}:`, err);
+async function findLiveRowIndex(sheets: any, orderId: string) {
+  const colBResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${SHEET_TAB_NAME}!B:B`,
+  });
+  const rows = colBResponse.data.values || [];
+  const liveIndex = rows.findIndex((row: any) => row && String(row[0]).trim() === orderId.trim());
+  if (liveIndex !== -1) {
+    return liveIndex;
   }
-  return fallbackIndex;
+  throw new Error(`Order ${orderId} was not found in Column B of the Google Sheet.`);
 }
 
 // Color row in Google Sheet: '#88f7af' (partial) or '#00FFFF' (cyan)
@@ -324,7 +320,7 @@ export async function POST(request: Request) {
     try {
       const sheets = getGoogleSheetsClient();
       const actualSheetId = await getActualSheetId(sheets);
-      const liveRowIndex = await findLiveRowIndex(sheets, cleanOrderId, fallbackRowIndex);
+      const liveRowIndex = await findLiveRowIndex(sheets, cleanOrderId);
 
       // Color the live row
       await colorSheetRow(sheets, actualSheetId, liveRowIndex, sheetColor);
