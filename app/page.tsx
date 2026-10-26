@@ -11,6 +11,7 @@ interface CellData {
   textColor: string;
   strikethrough: boolean;
   isCyan?: boolean;
+  isPartial?: boolean;
   note: string | null;
 }
 
@@ -67,7 +68,7 @@ export default function POSDashboard() {
   const [activeFactoryFilters, setActiveFactoryFilters] = useState<string[]>([]);
   const [activeFactoryInclusions, setActiveFactoryInclusions] = useState<string[]>([]);
   const [selectedFactoryDates, setSelectedFactoryDates] = useState<string[]>([]);
-  const [factoryData, setFactoryData] = useState<{availableFilters: string[], orders: any[], factoryList: any[]}>({availableFilters: [], orders: [], factoryList: []});
+  const [factoryData, setFactoryData] = useState<{availableFilters: string[], orders: any[], factoryList: any[], hasPartialOrders?: boolean}>({availableFilters: [], orders: [], factoryList: [], hasPartialOrders: false});
   const [factoryLoading, setFactoryLoading] = useState(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [selectedFactoryRows, setSelectedFactoryRows] = useState<number[]>([]);
@@ -980,7 +981,7 @@ export default function POSDashboard() {
                     title="Include Throwaways"
                   >
                     <option value="" disabled>+ Include Orders</option>
-                    {['Cancelled', 'Hold', 'See Message', 'Unreachable', 'See WA', 'Number Off', 'See Whatsapp', 'Strikethrough', 'Cyan']
+                    {['Cancelled', 'Hold', 'See Message', 'Unreachable', 'See WA', 'Number Off', 'See Whatsapp', 'Strikethrough', 'Cyan', ...(factoryData.hasPartialOrders || activeFactoryInclusions.includes('partial') ? ['Partial'] : [])]
                       .filter(f => !activeFactoryInclusions.includes(f.toLowerCase()))
                       .map(f => (
                       <option key={f} value={f.toLowerCase()}>{f}</option>
@@ -1210,12 +1211,16 @@ export default function POSDashboard() {
 
                   const isRowStrikethrough = order.cells.slice(7, 13).some(c => c.strikethrough);
                   const isRowCyan = order.cells.slice(7, 13).some(c => c.backgroundColor === 'rgb(0, 255, 255)' || c.isCyan);
+                  const isRowPartial = order.cells.slice(7, 13).some(c => c.backgroundColor === 'rgb(136, 247, 175)' || c.isPartial);
                   const getStyle = (colIndex: number) => {
                     if (!order.cells || !order.cells[colIndex]) return {};
                     const cell = order.cells[colIndex];
                     const styleObj: any = {};
                     if (isRowCyan) {
                       styleObj.backgroundColor = '#00FFFF';
+                      styleObj.color = '#000000';
+                    } else if (isRowPartial) {
+                      styleObj.backgroundColor = '#88f7af';
                       styleObj.color = '#000000';
                     } else {
                       if (cell.backgroundColor && cell.backgroundColor !== 'transparent') styleObj.backgroundColor = cell.backgroundColor;

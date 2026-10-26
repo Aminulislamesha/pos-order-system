@@ -90,7 +90,11 @@ export async function GET(request: Request) {
         const isStrikethrough = cell.effectiveFormat?.textFormat?.strikethrough || false;
         const bg = cell.effectiveFormat?.backgroundColor;
         const isCyan = bg && (bg.red || 0) === 0 && Math.abs((bg.green || 0) - 1) < 0.1 && Math.abs((bg.blue || 0) - 1) < 0.1;
-        return { value: String(value), strikethrough: isStrikethrough, isCyan, note: String(cell.note || "") };
+        const isPartial = bg &&
+          Math.abs((bg.red || 0) - 136 / 255) < 0.08 &&
+          Math.abs((bg.green || 0) - 247 / 255) < 0.08 &&
+          Math.abs((bg.blue || 0) - 175 / 255) < 0.08;
+        return { value: String(value), strikethrough: isStrikethrough, isCyan, isPartial, note: String(cell.note || "") };
       });
 
       return {
@@ -109,6 +113,9 @@ export async function GET(request: Request) {
     // Filter based on inclusion/exclusion rules
     const includedOrders: any[] = [];
     const availableFilters = new Set<string>();
+    const hasPartialOrders = allOrders.some((o: any) =>
+      o.cells?.slice(7, 13).some((c: any) => c.isPartial)
+    );
 
     for (const o of allOrders) {
       const orderId = String(o.colB).trim();
@@ -125,6 +132,7 @@ export async function GET(request: Request) {
       const isSeeWhatsapp = /see whatsapp/i.test(colCLower);
       const isStrikethrough = o.cells.slice(7, 13).some((c: any) => c.strikethrough);
       const isCyan = o.cells.slice(7, 13).some((c: any) => c.isCyan);
+      const isPartial = o.cells.slice(7, 13).some((c: any) => c.isPartial);
 
       if (
         (isCancelled && !activeInclusions.includes('cancelled')) ||
@@ -135,7 +143,8 @@ export async function GET(request: Request) {
         (isNumberOff && !activeInclusions.includes('number off')) ||
         (isSeeWhatsapp && !activeInclusions.includes('see whatsapp')) ||
         (isStrikethrough && !activeInclusions.includes('strikethrough')) ||
-        (isCyan && !activeInclusions.includes('cyan'))
+        (isCyan && !activeInclusions.includes('cyan')) ||
+        (isPartial && !activeInclusions.includes('partial'))
       ) {
         continue;
       }
@@ -402,7 +411,8 @@ export async function GET(request: Request) {
       data: {
         availableFilters: Array.from(availableFilters).sort(),
         orders: exactShortageOrders,
-        factoryList
+        factoryList,
+        hasPartialOrders
       } 
     });
 
