@@ -757,13 +757,13 @@ export default function PartialPackagingPage() {
                 <thead className="bg-gray-800 text-white uppercase text-xs tracking-wider">
                   <tr>
                     <th className="p-3 border-r border-gray-700 text-center w-24">Serial #</th>
+                    <th className="p-3 border-r border-gray-700 min-w-[220px]">Products & Status</th>
                     <th className="p-3 border-r border-gray-700 whitespace-nowrap">Date (A)</th>
                     <th className="p-3 border-r border-gray-700 whitespace-nowrap">Order ID (B)</th>
                     <th className="p-3 border-r border-gray-700">Status / Note (C)</th>
                     <th className="p-3 border-r border-gray-700">Customer (D)</th>
                     <th className="p-3 border-r border-gray-700">Phone (E)</th>
                     <th className="p-3 border-r border-gray-700 min-w-[140px]">Address (F)</th>
-                    <th className="p-3 border-r border-gray-700 min-w-[220px]">Products & Status</th>
                     <th className="p-3 text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
@@ -820,49 +820,7 @@ export default function PartialPackagingPage() {
                             )}
                           </td>
 
-                          {/* 2. DATE (Col A) */}
-                          <td className="p-3 border-r border-gray-200 whitespace-nowrap text-gray-800 font-semibold text-xs">
-                            {pkg.date || "—"}
-                          </td>
-
-                          {/* 3. ORDER ID (Col B) */}
-                          <td className="p-3 border-r border-gray-200 whitespace-nowrap font-black text-base text-blue-800">
-                            {pkg.orderId}
-                          </td>
-
-                          {/* 4. NOTE / STATUS (Col C) with eye-catching flag */}
-                          <td className="p-3 border-r border-gray-200">
-                            {pkg.note ? (
-                              hasNoteWarning ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black bg-red-600 text-white shadow animate-pulse">
-                                  ⚠️ {pkg.note}
-                                </span>
-                              ) : (
-                                <span className="font-bold text-xs text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                                  {pkg.note}
-                                </span>
-                              )
-                            ) : (
-                              <span className="text-gray-400 italic text-xs">—</span>
-                            )}
-                          </td>
-
-                          {/* 5. CUSTOMER NAME (Col D) */}
-                          <td className="p-3 border-r border-gray-200 font-semibold text-gray-900 text-sm">
-                            {pkg.customerName || "—"}
-                          </td>
-
-                          {/* 6. PHONE (Col E) */}
-                          <td className="p-3 border-r border-gray-200 font-mono text-xs text-gray-700 whitespace-nowrap">
-                            {pkg.phone || "—"}
-                          </td>
-
-                          {/* 7. ADDRESS (Col F) */}
-                          <td className="p-3 border-r border-gray-200 text-xs text-gray-600 max-w-[180px] truncate" title={pkg.address || ""}>
-                            {pkg.address || "—"}
-                          </td>
-
-                          {/* 8. PRODUCTS BREAKDOWN */}
+                          {/* 2. PRODUCTS & STATUS */}
                           <td className="p-3 border-r border-gray-200">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 mb-1">
@@ -888,6 +846,48 @@ export default function PartialPackagingPage() {
                                 );
                               })}
                             </div>
+                          </td>
+
+                          {/* 3. DATE (Col A) */}
+                          <td className="p-3 border-r border-gray-200 whitespace-nowrap text-gray-800 font-semibold text-xs">
+                            {pkg.date || "—"}
+                          </td>
+
+                          {/* 4. ORDER ID (Col B) */}
+                          <td className="p-3 border-r border-gray-200 whitespace-nowrap font-black text-base text-blue-800">
+                            {pkg.orderId}
+                          </td>
+
+                          {/* 5. NOTE / STATUS (Col C) with eye-catching flag */}
+                          <td className="p-3 border-r border-gray-200">
+                            {pkg.note ? (
+                              hasNoteWarning ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black bg-red-600 text-white shadow animate-pulse">
+                                  ⚠️ {pkg.note}
+                                </span>
+                              ) : (
+                                <span className="font-bold text-xs text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                                  {pkg.note}
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-gray-400 italic text-xs">—</span>
+                            )}
+                          </td>
+
+                          {/* 6. CUSTOMER NAME (Col D) */}
+                          <td className="p-3 border-r border-gray-200 font-semibold text-gray-900 text-sm">
+                            {pkg.customerName || "—"}
+                          </td>
+
+                          {/* 7. PHONE (Col E) */}
+                          <td className="p-3 border-r border-gray-200 font-mono text-xs text-gray-700 whitespace-nowrap">
+                            {pkg.phone || "—"}
+                          </td>
+
+                          {/* 8. ADDRESS (Col F) */}
+                          <td className="p-3 border-r border-gray-200 text-xs text-gray-600 max-w-[180px] truncate" title={pkg.address || ""}>
+                            {pkg.address || "—"}
                           </td>
 
                           {/* 9. ACTIONS */}
