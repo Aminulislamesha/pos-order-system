@@ -229,3 +229,28 @@ model SteadfastStatement {
   @@index([uploaded_at])
 }
 
+model PartialPackage {
+  id              String    @id @default(uuid())
+  serialNumber    Int?      // Active poly bag serial number (1, 2, 3...)
+  previousSerial  Int?      // The serial number it had before fulfillment (for visual history: "was #2")
+  orderId         String    @unique // e.g. "SC53358" or "NN-20987"
+  rowIndex        Int       // Live row index in Google Sheet
+  date            String?   // Formatted Date (Col A)
+  note            String?   // Status / Dispatch (Col C)
+  customerName    String?   // Col D
+  phone           String?   // Col E
+  address         String?   // Col F
+  rawProducts     Json      // [{ name: string, orderedQty: number }]
+  packedProducts  Json      // [{ name: string, packedQty: number }]
+  isFulfilled     Boolean   @default(false)
+  fulfilledAt     DateTime?
+  sheetColor      String?   // "#88f7af" or "#00FFFF"
+  rawCells        Json?     // Full sheet cells array for rendering all sheet columns
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([orderId])
+  @@index([serialNumber])
+  @@index([isFulfilled])
+}
+

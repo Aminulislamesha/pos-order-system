@@ -82,6 +82,32 @@ export async function POST(request) {
           }]
         }
       });
+
+      // Update PartialPackage in database if this order was partially packed
+      if (orderId) {
+        try {
+          const { prisma } = await import('@/lib/prisma');
+          const cleanId = String(orderId).trim();
+          const existingPartial = await prisma.partialPackage.findUnique({
+            where: { orderId: cleanId }
+          });
+          if (existingPartial && !existingPartial.isFulfilled) {
+            await prisma.partialPackage.update({
+              where: { orderId: cleanId },
+              data: {
+                isFulfilled: true,
+                fulfilledAt: new Date(),
+                previousSerial: existingPartial.serialNumber || existingPartial.previousSerial,
+                serialNumber: null,
+                sheetColor: '#00FFFF'
+              }
+            });
+          }
+        } catch (dbErr) {
+          console.error("Failed to update partial package in DB on main scan:", dbErr);
+        }
+      }
+
       return NextResponse.json({ success: true });
     } 
     

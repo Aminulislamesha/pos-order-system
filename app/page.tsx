@@ -574,6 +574,13 @@ export default function POSDashboard() {
                 <button onClick={() => window.location.href = '/inventory'} className="bg-teal-600 text-white px-6 py-2 rounded-md font-bold hover:bg-teal-700 shadow-md">🗄️ Inventory Dashboard</button>
                 <button onClick={() => setActiveView("readyToPackage")} className="bg-green-600 text-white px-6 py-2 rounded-md font-bold hover:bg-green-700 shadow-md">📦 Ready to Package</button>
                 <button 
+                  onClick={() => window.location.href = '/partial'} 
+                  className="bg-amber-600 text-white px-5 py-2 rounded-md font-bold hover:bg-amber-700 shadow-md transition flex items-center gap-1.5"
+                  title="Open Partial Package Management System"
+                >
+                  📦 Partial
+                </button>
+                <button 
                   onClick={() => window.open('/nn-weblog', '_blank')} 
                   className="bg-indigo-600 text-white px-5 py-2 rounded-md font-bold hover:bg-indigo-700 shadow-md transition flex items-center gap-1.5"
                   title="Open Customer Order Management & Steadfast Weblog"
