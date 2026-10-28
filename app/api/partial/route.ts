@@ -247,6 +247,11 @@ export async function GET(request: Request) {
             let needsUpdate = false;
             const updatePayload: any = {};
 
+            if (pkg.notFoundInSheet) {
+              updatePayload.notFoundInSheet = false;
+              needsUpdate = true;
+            }
+
             if (pkg.rowIndex !== liveData.rowIndex) {
               updatePayload.rowIndex = liveData.rowIndex;
               needsUpdate = true;
@@ -308,6 +313,14 @@ export async function GET(request: Request) {
                 data: updatePayload,
               });
             }
+          } else {
+            // Row was not found in Google Sheet! Mark warning
+            if (!pkg.notFoundInSheet) {
+              await prisma.partialPackage.update({
+                where: { id: pkg.id },
+                data: { notFoundInSheet: true },
+              });
+            }
           }
         }
 
@@ -337,6 +350,7 @@ export async function POST(request: Request) {
       rawProducts,    // [{ name, orderedQty }]
       isFulfilled: explicitFulfilled,
       orderData,      // { rowIndex, colA, colB, colC, colD, colE, colF, cells }
+      serialNumber: requestedSerial, // bag number allocated from modal preview
     } = body;
 
     if (!orderId) {
@@ -379,6 +393,8 @@ export async function POST(request: Request) {
       // Active partial package: keep existing serial or generate next available
       if (existing && existing.serialNumber && !existing.isFulfilled) {
         serialNumber = existing.serialNumber;
+      } else if (requestedSerial && typeof requestedSerial === 'number' && requestedSerial > 0) {
+        serialNumber = requestedSerial;
       } else {
         serialNumber = await getNextAvailableSerial(cleanOrderId);
       }
@@ -414,6 +430,7 @@ export async function POST(request: Request) {
           isFulfilled,
           fulfilledAt: isFulfilled ? new Date() : null,
           sheetColor,
+          notFoundInSheet: false,
           rawCells: orderData?.cells ?? existing?.rawCells ?? null,
         },
         update: {
@@ -430,6 +447,7 @@ export async function POST(request: Request) {
           isFulfilled,
           fulfilledAt: isFulfilled ? (existing?.fulfilledAt ?? new Date()) : null,
           sheetColor,
+          notFoundInSheet: false,
           rawCells: orderData?.cells ?? existing?.rawCells,
         },
       });
@@ -437,6 +455,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data: upserted });
     } catch (sheetErr: any) {
       console.error('Google Sheets coloring error in /api/partial:', sheetErr);
+
+      if (sheetErr.message && sheetErr.message.includes('was not found in Column B')) {
+        return NextResponse.json({
+          success: false,
+          error: `Order [${cleanOrderId}] was not found in your Google Sheet.`,
+          notFoundInSheet: true,
+        }, { status: 404 });
+      }
 
       // If Google Sheets fails, still save to DB so user data is never lost
       const upserted = await prisma.partialPackage.upsert({

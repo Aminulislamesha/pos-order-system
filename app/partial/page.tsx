@@ -24,12 +24,13 @@ interface PartialPackageRecord {
   isFulfilled: boolean;
   fulfilledAt: string | null;
   sheetColor: string | null;
+  notFoundInSheet?: boolean;
   rawCells: any[] | null;
   createdAt: string;
   updatedAt: string;
 }
 
-const NOTE_WARNING_REGEX = /\b(cancelled|cancel|hold|see message|see m|see whatsapp|see wa|pos update need|pos update needed)\b/i;
+const NOTE_WARNING_REGEX = /(cancelled|cancel|hold|see message|see m|see whatsapp|see wa|pos update need|pos update needed|call before dispatch)/i;
 
 export default function PartialPackagingPage() {
   // Data state
@@ -72,7 +73,15 @@ export default function PartialPackagingPage() {
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setPartialPackages(json.data);
-        if (syncWithSheet) showToast("Synced with Google Sheet successfully!");
+        if (syncWithSheet) {
+          await fetchSheetOrders();
+          const missingCount = json.data.filter((p: any) => p.notFoundInSheet).length;
+          if (missingCount > 0) {
+            showToast(`⚠️ Synced: ${missingCount} order(s) not found in Google Sheet (see table)`);
+          } else {
+            showToast("Synced with Google Sheet successfully!");
+          }
+        }
       } else {
         console.error("Failed to load partial packages:", json.error);
       }
@@ -159,16 +168,114 @@ export default function PartialPackagingPage() {
     return products;
   };
 
+  // Check if order is Cyan in Google Sheet
+  const isOrderCyanInSheet = (order: any): boolean => {
+    if (!order || !Array.isArray(order.cells)) return false;
+    return order.cells.some((c: any) => {
+      const bg = String(c?.backgroundColor || '').toLowerCase();
+      if (bg === 'rgb(0, 255, 255)' || bg === '#00ffff' || c?.isCyan) return true;
+      const m = bg.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+      if (m) {
+        const r = parseInt(m[1], 10);
+        const g = parseInt(m[2], 10);
+        const b = parseInt(m[3], 10);
+        if (r < 30 && g > 230 && b > 230) return true;
+      }
+      return false;
+    });
+  };
+
+  // Check if order is Partial (#88f7af) in Google Sheet
+  const isOrderPartialInSheet = (order: any): boolean => {
+    if (!order || !Array.isArray(order.cells)) return false;
+    return order.cells.some((c: any) => {
+      const bg = String(c?.backgroundColor || '').toLowerCase();
+      if (bg === 'rgb(136, 247, 175)' || bg === '#88f7af' || c?.isPartial) return true;
+      const m = bg.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+      if (m) {
+        const r = parseInt(m[1], 10);
+        const g = parseInt(m[2], 10);
+        const b = parseInt(m[3], 10);
+        if (Math.abs(r - 136) < 25 && Math.abs(g - 247) < 25 && Math.abs(b - 175) < 25) return true;
+      }
+      return false;
+    });
+  };
+
+  // Get next available serial/bag number
+  const getNextAvailableBagNumber = (currentOrderId?: string): number => {
+    const used = new Set<number>();
+    partialPackages.forEach(p => {
+      if (!p.isFulfilled && typeof p.serialNumber === 'number' && p.orderId.toLowerCase() !== (currentOrderId || '').toLowerCase()) {
+        used.add(p.serialNumber);
+      }
+    });
+    let candidate = 1;
+    while (used.has(candidate)) {
+      candidate++;
+    }
+    return candidate;
+  };
+
+  // Validate before marking as full (Check sheet, cyan, and sensitive notes)
+  const validateBeforeMarkFull = (orderId: string, note?: string | null): boolean => {
+    const cleanId = String(orderId).trim();
+    const sheetOrder = sheetOrders.find(o => String(o.colB).trim().toLowerCase() === cleanId.toLowerCase());
+
+    // 1. Check if order exists in Google Sheet
+    if (!sheetOrder) {
+      alert(`⚠️ WARNING: Order [${cleanId}] was not found in your Google Sheet! Cannot mark as full.`);
+      return false;
+    }
+
+    // 2. Check if already cyan-colored in Google Sheet
+    if (isOrderCyanInSheet(sheetOrder)) {
+      alert(`⚠️ ALREADY CYAN: Order [${cleanId}] is already cyan-colored in your Google Sheet.`);
+      return false;
+    }
+
+    // 3. Check if note has sensitive keywords: cancelled|cancel|hold|see message|see m|see whatsapp|see wa|pos update need|pos update needed|call before dispatch
+    const effectiveNote = String(sheetOrder.colC || note || '').trim();
+    if (NOTE_WARNING_REGEX.test(effectiveNote)) {
+      const proceed = confirm(
+        `⚠️ SENSITIVE NOTE WARNING for Order [${cleanId}]:\n\n"${effectiveNote}"\n\nThis order has a sensitive note (Hold / Cancel / POS Update / Call). Are you sure you want to proceed and mark it as Full (Cyan)?`
+      );
+      if (!proceed) return false;
+    }
+
+    return true;
+  };
+
   // Open packaging modal for an order (either from scan or table edit)
-  const openPackagingModalForOrder = (orderId: string, sheetOrderFallback?: any) => {
+  const openPackagingModalForOrder = (orderId: string, sheetOrderFallback?: any, isNewScan = false) => {
     const cleanId = String(orderId).trim();
     const existingPkg = partialPackages.find(p => p.orderId.toLowerCase() === cleanId.toLowerCase());
     const sheetOrder = sheetOrderFallback || sheetOrders.find(o => String(o.colB).trim().toLowerCase() === cleanId.toLowerCase());
 
-    if (!existingPkg && !sheetOrder) {
-      alert(`❌ Order [${cleanId}] not found in the Google Sheet data. Please click "Sync with Sheet" or check the Order ID.`);
+    // 1. If order does not exist in Google Sheet, show warning message!
+    if (!sheetOrder) {
+      alert(`⚠️ WARNING: Order [${cleanId}] was not found in your Google Sheet!\n\nPlease check the Order ID or click "Sync with Sheet".`);
       return;
     }
+
+    // 2. If it is scanning a QR code or adding a new order:
+    if (isNewScan) {
+      const isAlreadyCyan = isOrderCyanInSheet(sheetOrder) || (existingPkg?.isFulfilled ?? false);
+      const isAlreadyPartial = isOrderPartialInSheet(sheetOrder) || (existingPkg && !existingPkg.isFulfilled);
+
+      if (isAlreadyCyan) {
+        const proceed = confirm(`⚠️ ALREADY FULFILLED / CYAN: Order [${cleanId}] is already cyan-colored in your Google Sheet.\n\nDo you still want to open and modify this order?`);
+        if (!proceed) return;
+      } else if (isAlreadyPartial) {
+        const bagNum = existingPkg?.serialNumber ? ` (Bag #${existingPkg.serialNumber})` : '';
+        alert(`ℹ️ ALREADY PARTIAL: Order [${cleanId}] is already partial-colored in your Google Sheet${bagNum}.`);
+      }
+    }
+
+    // 3. Determine bag number: if active partial pkg exists, keep its serial; otherwise compute next available
+    const assignedBag = (existingPkg && !existingPkg.isFulfilled && existingPkg.serialNumber)
+      ? existingPkg.serialNumber
+      : getNextAvailableBagNumber(cleanId);
 
     // Determine raw products
     let rawProducts: { name: string; orderedQty: number }[] = [];
@@ -200,7 +307,8 @@ export default function PartialPackagingPage() {
       colF: existingPkg.address,
       cells: existingPkg.rawCells,
       rowIndex: existingPkg.rowIndex,
-      serialNumber: existingPkg.serialNumber,
+      serialNumber: assignedBag,
+      assignedBagNumber: assignedBag,
       isFulfilled: existingPkg.isFulfilled
     } : {
       orderId: sheetOrder.colB,
@@ -212,7 +320,8 @@ export default function PartialPackagingPage() {
       colF: sheetOrder.cells?.[5]?.value || "",
       cells: sheetOrder.cells,
       rowIndex: sheetOrder.originalRowIndex,
-      serialNumber: null,
+      serialNumber: assignedBag,
+      assignedBagNumber: assignedBag,
       isFulfilled: false
     };
 
@@ -225,12 +334,27 @@ export default function PartialPackagingPage() {
   const handleScannedCode = (code: string) => {
     const clean = code.trim();
     if (!clean) return;
-    openPackagingModalForOrder(clean);
+    openPackagingModalForOrder(clean, undefined, true);
   };
 
   // Save changes from modal
   const handleSaveModal = async (forceFulfilled = false) => {
     if (!editingOrder) return;
+
+    // Check if all packed
+    const allPacked = modalProducts.length > 0 && modalProducts.every(p => {
+      return (forceFulfilled ? p.orderedQty : p.packedQty) >= p.orderedQty;
+    });
+
+    const isFulfilled = forceFulfilled || allPacked;
+
+    // Requirement 4: Validate before marking as full
+    if (isFulfilled) {
+      if (!validateBeforeMarkFull(editingOrder.orderId, editingOrder.colC)) {
+        return;
+      }
+    }
+
     setIsSaving(true);
 
     try {
@@ -244,15 +368,9 @@ export default function PartialPackagingPage() {
         packedQty: forceFulfilled ? p.orderedQty : p.packedQty
       }));
 
-      // Check if all packed
-      const allPacked = modalProducts.length > 0 && modalProducts.every(p => {
-        return (forceFulfilled ? p.orderedQty : p.packedQty) >= p.orderedQty;
-      });
-
-      const isFulfilled = forceFulfilled || allPacked;
-
       const payload = {
         orderId: editingOrder.orderId,
+        serialNumber: editingOrder.assignedBagNumber || editingOrder.serialNumber,
         packedProducts,
         rawProducts,
         isFulfilled,
@@ -276,7 +394,7 @@ export default function PartialPackagingPage() {
 
       const json = await res.json();
       if (json.success) {
-        showToast(isFulfilled ? `Order ${editingOrder.orderId} marked as Fulfilled!` : `Order ${editingOrder.orderId} saved as Partial!`);
+        showToast(isFulfilled ? `Order ${editingOrder.orderId} marked as Fulfilled!` : `Order ${editingOrder.orderId} saved as Partial (Bag #${editingOrder.assignedBagNumber || editingOrder.serialNumber})!`);
         setModalOpen(false);
         fetchPartialPackages();
       } else {
@@ -291,6 +409,9 @@ export default function PartialPackagingPage() {
 
   // One-click "Mark as Full" from table
   const handleMarkAsFullDirect = async (pkg: PartialPackageRecord) => {
+    // Requirement 4: Validate before marking as full
+    if (!validateBeforeMarkFull(pkg.orderId, pkg.note)) return;
+
     if (!confirm(`Mark Order [${pkg.orderId}] as completely fulfilled and color Cyan in Google Sheet?`)) return;
 
     try {
@@ -802,7 +923,9 @@ export default function PartialPackagingPage() {
                         <tr
                           key={pkg.id}
                           className={`transition-colors ${
-                            isFulfilled
+                            pkg.notFoundInSheet
+                              ? 'bg-red-50/70 hover:bg-red-100/70 border-l-4 border-l-red-500'
+                              : isFulfilled
                               ? 'bg-[#00ffff]/20 hover:bg-[#00ffff]/30'
                               : 'bg-white hover:bg-green-50/50'
                           }`}
@@ -887,7 +1010,7 @@ export default function PartialPackagingPage() {
                                   ⚠️ {pkg.note}
                                 </span>
                               ) : (
-                                <span className="font-bold text-xs text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                                <span className="font-semibold text-xs text-slate-800 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded">
                                   {pkg.note}
                                 </span>
                               )
@@ -902,8 +1025,15 @@ export default function PartialPackagingPage() {
                           </td>
 
                           {/* 6. ORDER ID (Col B) */}
-                          <td className="p-3 border-r border-gray-200 whitespace-nowrap font-black text-base text-blue-800">
-                            {pkg.orderId}
+                          <td className="p-3 border-r border-gray-200 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span className="font-black text-base text-blue-800">{pkg.orderId}</span>
+                              {pkg.notFoundInSheet && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-red-700 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded shadow-sm mt-1 animate-pulse" title="This order row was not found in Column B of Google Sheet">
+                                  ⚠️ Not found in Sheet
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* 7. CUSTOMER NAME (Col D) */}
@@ -1166,11 +1296,9 @@ export default function PartialPackagingPage() {
               <div>
                 <div className="flex items-center gap-3">
                   <h3 className="font-black text-2xl text-blue-400">{editingOrder.orderId}</h3>
-                  {editingOrder.serialNumber && !editingOrder.isFulfilled && (
-                    <span className="bg-amber-500 text-white font-black text-xs px-2.5 py-1 rounded-full">
-                      Bag #{editingOrder.serialNumber}
-                    </span>
-                  )}
+                  <span className="bg-amber-500 text-white font-black text-xs px-3 py-1 rounded-full shadow flex items-center gap-1.5 border border-amber-400">
+                    🛍️ Bag #{editingOrder.assignedBagNumber || editingOrder.serialNumber || 1}
+                  </span>
                   {editingOrder.isFulfilled && (
                     <span className="bg-cyan-500 text-gray-900 font-black text-xs px-2.5 py-1 rounded-full">
                       ✓ Fulfilled
@@ -1189,14 +1317,14 @@ export default function PartialPackagingPage() {
               </button>
             </div>
 
-            {/* Note Warning Banner if sensitive keywords found */}
+            {/* Note Banner */}
             {editingOrder.colC && (
               <div className={`p-3 text-xs font-bold border-b flex items-center gap-2 ${
                 NOTE_WARNING_REGEX.test(editingOrder.colC)
-                  ? 'bg-red-600 text-white animate-pulse'
-                  : 'bg-yellow-50 text-yellow-900 border-yellow-200'
+                  ? 'bg-red-600 text-white shadow-md animate-pulse'
+                  : 'bg-slate-100 text-slate-800 border-slate-200'
               }`}>
-                <span>⚠️ Note:</span>
+                <span>{NOTE_WARNING_REGEX.test(editingOrder.colC) ? '🚨 CRITICAL NOTE / HOLD:' : '📝 Note:'}</span>
                 <span>{editingOrder.colC}</span>
               </div>
             )}

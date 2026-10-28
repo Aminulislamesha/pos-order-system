@@ -245,6 +245,7 @@ model PartialPackage {
   isFulfilled     Boolean   @default(false)
   fulfilledAt     DateTime?
   sheetColor      String?   // "#88f7af" or "#00FFFF"
+  notFoundInSheet Boolean   @default(false)
   rawCells        Json?     // Full sheet cells array for rendering all sheet columns
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
